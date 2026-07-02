@@ -3,11 +3,15 @@ export enum Gender {
   FEMALE = 'FEMALE'
 }
 
+export type PlayerStatus = 'ACTIVE' | 'SUSPENDED';
+
 export interface Player {
   id: string;
   name: string;
   gender: Gender;
   level?: number;
+  createdAt?: number;
+  status?: PlayerStatus;
 }
 
 export interface Team {
