@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ListOrdered, Shuffle, Calendar, CheckCircle2, Circle, Shield, Link2, X, Settings2 } from 'lucide-react';
+import { ListOrdered, Shuffle, Calendar, CheckCircle2, Circle, Shield, Link2, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MatchType } from '../types';
 import { useStore } from '../store/useStore';
@@ -53,6 +53,8 @@ const ScheduleControls: React.FC = () => {
 
   const [selectedForPair, setSelectedForPair] = useState<string[]>([]);
   const [isFullScheduleMode, setIsFullScheduleMode] = useState<boolean>(false);
+  const [isFirstMatchPlayersOpen, setIsFirstMatchPlayersOpen] = useState<boolean>(false);
+  const [isFixedPairsOpen, setIsFixedPairsOpen] = useState<boolean>(false);
 
   const handleGenerateSchedule = (type: MatchType) => {
     setErrorMsg(null);
@@ -124,7 +126,7 @@ const ScheduleControls: React.FC = () => {
     if (validFirstMatchIds.includes(id)) {
       setFirstMatchPlayerIds(validFirstMatchIds.filter(pid => pid !== id));
     } else {
-      if (validFirstMatchIds.length < 4) {
+      if (validFirstMatchIds.length < courtCount * 4) {
         setFirstMatchPlayerIds([...validFirstMatchIds, id]);
       }
     }
@@ -226,7 +228,7 @@ const ScheduleControls: React.FC = () => {
                <ControlToggle 
                  active={avoidGenderSkew} 
                  onClick={() => setAvoidGenderSkew(!avoidGenderSkew)}
-                 label="避免不平性別戰" 
+                 label="避免男雙vs女雙" 
                  title="避免男男vs女女"
                  colorClass="bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm"
                />
@@ -249,85 +251,100 @@ const ScheduleControls: React.FC = () => {
           <div className="space-y-6 flex flex-col">
             {/* First Match Players */}
             <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex-1">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">💎 指定首戰球員</span>
+              <div 
+                className="flex items-center justify-between cursor-pointer group"
+                onClick={() => setIsFirstMatchPlayersOpen(!isFirstMatchPlayersOpen)}
+              >
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-500 transition-colors flex items-center gap-1.5">
+                  💎 指定首戰球員 {isFirstMatchPlayersOpen ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                </span>
                 <span className="text-xs font-bold bg-white dark:bg-slate-800 px-2.5 py-1 rounded-full shadow-sm text-slate-500">
-                  {firstMatchPlayerIds.filter(id => players.some(p => p.id === id)).length} / 4
+                  {firstMatchPlayerIds.filter(id => players.some(p => p.id === id)).length} / {courtCount * 4}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {players.map(p => {
-                  const isSelected = firstMatchPlayerIds.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => toggleFirstMatchPlayer(p.id)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                        isSelected 
-                          ? 'bg-emerald-500 text-white shadow-md scale-105' 
-                          : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-              </div>
+              
+              {isFirstMatchPlayersOpen && (
+                <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-2 mt-4">
+                  {players.map(p => {
+                    const isSelected = firstMatchPlayerIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => toggleFirstMatchPlayer(p.id)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                          isSelected 
+                            ? 'bg-emerald-500 text-white shadow-md scale-105' 
+                            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Fixed Pairs */}
             <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex-1">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                  <Link2 size={16} className="text-blue-500" /> 指定搭檔
+              <div 
+                className="flex items-center justify-between cursor-pointer group"
+                onClick={() => setIsFixedPairsOpen(!isFixedPairsOpen)}
+              >
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 group-hover:text-blue-500 transition-colors">
+                  <Link2 size={16} className="text-blue-500" /> 指定搭檔 {isFixedPairsOpen ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                 </span>
                 <span className="text-xs font-bold bg-white dark:bg-slate-800 px-2.5 py-1 rounded-full shadow-sm text-slate-500">
                   {fixedPairs.length} 組
                 </span>
               </div>
               
-              {fixedPairs.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {fixedPairs.map(([p1Id, p2Id], idx) => {
-                    const p1 = players.find(p => p.id === p1Id);
-                    const p2 = players.find(p => p.id === p2Id);
-                    if (!p1 || !p2) return null;
-                    return (
-                      <div key={idx} className="flex items-center gap-1 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-blue-900/50 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm">
-                        <span>{p1.name}</span>
-                        <span className="text-blue-400 dark:text-blue-500 mx-0.5">&amp;</span>
-                        <span>{p2.name}</span>
-                        <button 
-                          onClick={() => removeFixedPair(p1Id, p2Id)}
-                          className="ml-2 bg-red-50 dark:bg-red-900/20 text-red-400 hover:text-red-600 dark:hover:text-red-300 p-0.5 rounded-md transition-colors"
+              {isFixedPairsOpen && (
+                <div className="mt-4">
+                  {fixedPairs.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {fixedPairs.map(([p1Id, p2Id], idx) => {
+                        const p1 = players.find(p => p.id === p1Id);
+                        const p2 = players.find(p => p.id === p2Id);
+                        if (!p1 || !p2) return null;
+                        return (
+                          <div key={idx} className="flex items-center gap-1 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-blue-900/50 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm">
+                            <span>{p1.name}</span>
+                            <span className="text-blue-400 dark:text-blue-500 mx-0.5">&amp;</span>
+                            <span>{p2.name}</span>
+                            <button 
+                              onClick={() => removeFixedPair(p1Id, p2Id)}
+                              className="ml-2 bg-red-50 dark:bg-red-900/20 text-red-400 hover:text-red-600 dark:hover:text-red-300 p-0.5 rounded-md transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-2">
+                    {players.map(p => {
+                      if (fixedPairs.some(pair => pair.includes(p.id))) return null;
+                      const isSelected = selectedForPair.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => toggleForPair(p.id)}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                            isSelected 
+                              ? 'bg-blue-500 text-white shadow-md scale-105 ring-2 ring-blue-300 dark:ring-blue-800 ring-offset-1 dark:ring-offset-slate-900' 
+                              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                          }`}
                         >
-                          <X size={14} />
+                          {p.name}
                         </button>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
-
-              <div className="flex flex-wrap gap-2">
-                {players.map(p => {
-                  if (fixedPairs.some(pair => pair.includes(p.id))) return null;
-                  const isSelected = selectedForPair.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => toggleForPair(p.id)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                        isSelected 
-                          ? 'bg-blue-500 text-white shadow-md scale-105 ring-2 ring-blue-300 dark:ring-blue-800 ring-offset-1 dark:ring-offset-slate-900' 
-                          : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </div>

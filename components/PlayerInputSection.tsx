@@ -84,7 +84,7 @@ const PlayerInputSection: React.FC = () => {
       {/* Decorative Sporty Stripes */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 dark:bg-emerald-500/10 rotate-45 transform origin-top-right -translate-y-16 translate-x-16 pointer-events-none"></div>
       
-      <div className="flex items-center justify-between mb-8 relative z-10">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-8 relative z-10">
          <div className="flex flex-col">
            <h2 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-2 italic tracking-tight">
               <Users className="text-emerald-500" strokeWidth={2.5} />
@@ -94,31 +94,30 @@ const PlayerInputSection: React.FC = () => {
               </span>
            </h2>
          </div>
-         <div className="flex items-center gap-2 sm:gap-3">
+         <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
            <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsShareModalOpen(true)}
-              className="text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-800/50 px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors font-bold shadow-sm"
+              className="text-[11px] sm:text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-800/50 px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors font-bold shadow-sm whitespace-nowrap shrink-0"
            >
-              <Share2 size={16} /> <span>分享揪團</span>
+              <Share2 size={14} className="shrink-0 sm:w-4 sm:h-4" /> <span>分享揪團</span>
            </motion.button>
            <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsImportModalOpen(true)}
-              className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors font-bold shadow-sm"
+              className="text-[11px] sm:text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors font-bold shadow-sm whitespace-nowrap shrink-0"
            >
-              <Upload size={16} /> <span className="hidden sm:inline">批次匯入</span>
+              <Upload size={14} className="shrink-0 sm:w-4 sm:h-4" /> <span>批次匯入</span>
            </motion.button>
            <motion.button 
               whileHover={{ scale: 1.05, color: '#ef4444' }}
               whileTap={{ scale: 0.95 }}
               onClick={clearPlayers} 
-              className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors font-bold"
-              title="清空名單"
+              className="text-[11px] sm:text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-2.5 py-2 sm:px-3 sm:py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors font-bold whitespace-nowrap shrink-0"
            >
-              <Trash2 size={16} />
+              <Trash2 size={14} className="shrink-0 sm:w-4 sm:h-4" /> <span>清空名單</span>
            </motion.button>
          </div>
       </div>
@@ -265,7 +264,7 @@ const PlayerInputSection: React.FC = () => {
             <p className="text-xs mt-1">請在上方輸入姓名加入清單</p>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2.5 max-h-[320px] overflow-y-auto p-1 pr-2 rounded-xl">
             <AnimatePresence>
               {players.map(player => (
                 <motion.div
@@ -275,6 +274,7 @@ const PlayerInputSection: React.FC = () => {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  className="w-auto"
                 >
                   <PlayerCard 
                     player={player} 
