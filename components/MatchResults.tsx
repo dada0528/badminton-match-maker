@@ -766,12 +766,12 @@ const MatchResults: React.FC = () => {
                   
                   {/* End Match Button (Fullscreen) */}
                   {!isFullScheduleMode && (
-                      <div className="mt-6 flex justify-center">
+                      <div className="mt-6 flex justify-center gap-2">
                          <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => handleEndMatch(idx)}
-                            className={`w-full py-4 rounded-xl font-black text-lg transition-colors shadow-lg ${
+                            className={`flex-1 py-4 rounded-xl font-black text-lg transition-colors shadow-lg ${
                                 match 
                                 ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700' 
                                 : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
@@ -779,6 +779,17 @@ const MatchResults: React.FC = () => {
                          >
                             {match ? '換下一組' : '開始安排'}
                          </motion.button>
+                         {matchHistory.some(m => m.court === idx + 1) && (
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => undoMatch(idx)}
+                              title="還原上一場"
+                              className="px-5 py-4 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-xl font-bold shadow-lg transition-colors flex items-center justify-center border border-red-800/50"
+                            >
+                               <RotateCw size={22} className="-scale-x-100" />
+                            </motion.button>
+                         )}
                       </div>
                   )}
                   </motion.div>
