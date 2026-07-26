@@ -30,6 +30,7 @@ const ScheduleControls: React.FC = () => {
     mixPartners, 
     avoidGenderSkew,
     enableSkillLevel,
+    skillMode,
     enableScoring,
     autoVoiceEnabled,
     fixedPairs,
@@ -40,6 +41,8 @@ const ScheduleControls: React.FC = () => {
     setScheduleType, 
     setMixPartners, 
     setAvoidGenderSkew,
+    setEnableSkillLevel,
+    setSkillMode,
     setEnableScoring,
     setAutoVoiceEnabled,
     setErrorMsg,
@@ -71,7 +74,7 @@ const ScheduleControls: React.FC = () => {
     
     for (let i = 0; i < courtCount; i++) {
         const result = generateNextMatch(
-            players, currentHistory, currentActive, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, i + 1, validFirstMatchIds
+            players, currentHistory, currentActive, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, i + 1, validFirstMatchIds, skillMode
         );
         if (result.match) {
             initialMatches[i] = result.match;
@@ -95,7 +98,7 @@ const ScheduleControls: React.FC = () => {
 
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
     const result = generateSchedule(
-        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs
+        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs, skillMode
     );
 
     if (result.error) {
@@ -205,6 +208,62 @@ const ScheduleControls: React.FC = () => {
                     </div>
                   </div>
                 )}
+            </div>
+
+            {/* Smart Matchmaking Mode */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                  <Shield size={18} className={enableSkillLevel ? 'text-amber-500' : 'text-slate-400'} />
+                  戰力平衡演算法
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEnableSkillLevel(!enableSkillLevel)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    enableSkillLevel 
+                      ? 'bg-amber-500 text-white shadow-sm' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {enableSkillLevel ? '已啟用' : '已關閉'}
+                </button>
+              </div>
+
+              {enableSkillLevel && (
+                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                  <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                    <span>配對戰力模式:</span>
+                    <span className="text-amber-600 dark:text-amber-400">兩隊總戰力星數差 &le; 1~2 顆星</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSkillMode('BALANCED')}
+                      className={`p-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 border ${
+                        skillMode === 'BALANCED'
+                          ? 'bg-emerald-500 text-white border-emerald-500 shadow-md scale-[1.02]'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">⚔️ 強制實力相近</span>
+                      <span className="text-[10px] opacity-80 font-normal">強強對決 (同隊星數相近)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSkillMode('STRONG_WEAK')}
+                      className={`p-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 border ${
+                        skillMode === 'STRONG_WEAK'
+                          ? 'bg-indigo-500 text-white border-indigo-500 shadow-md scale-[1.02]'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">🤝 以強帶弱模式</span>
+                      <span className="text-[10px] opacity-80 font-normal">實力補平 (一高加一低)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Smart Toggles */}

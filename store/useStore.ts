@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, Gender, Match, ScheduleItem, MatchType } from '../types';
+import { Player, Gender, Match, ScheduleItem, MatchType, SkillMode } from '../types';
 
 interface HistoryPlayer {
   name: string;
@@ -29,6 +29,7 @@ interface AppState {
   mixPartners: boolean;
   avoidGenderSkew: boolean;
   enableSkillLevel: boolean;
+  skillMode: SkillMode;
   enableScoring: boolean;
   autoVoiceEnabled: boolean;
   firstMatchPlayerIds: string[];
@@ -60,6 +61,7 @@ interface AppState {
   setFullSchedule: (schedule: ScheduleItem[]) => void;
   endMatch: (courtIndex: number, nextMatch: ScheduleItem | null) => void;
   updateMatchScore: (courtIndex: number, scoreA?: number, scoreB?: number) => void;
+  undoMatch: (courtIndex: number) => void;
   clearMatchHistory: () => void;
   
   setRounds: (rounds: number) => void;
@@ -69,6 +71,7 @@ interface AppState {
   setMixPartners: (mix: boolean) => void;
   setAvoidGenderSkew: (avoid: boolean) => void;
   setEnableSkillLevel: (enable: boolean) => void;
+  setSkillMode: (mode: SkillMode) => void;
   setEnableScoring: (enable: boolean) => void;
   setAutoVoiceEnabled: (enable: boolean) => void;
   setFirstMatchPlayerIds: (ids: string[]) => void;
@@ -98,6 +101,7 @@ export const useStore = create<AppState>()(
       mixPartners: true,
       avoidGenderSkew: true,
       enableSkillLevel: false,
+      skillMode: 'BALANCED',
       enableScoring: false,
       autoVoiceEnabled: false,
       firstMatchPlayerIds: [],
@@ -221,6 +225,32 @@ export const useStore = create<AppState>()(
         return { activeMatches: newActiveMatches };
       }),
 
+      undoMatch: (courtIndex: number) => set((state) => {
+        const history = [...state.matchHistory];
+        let lastMatchIndex = -1;
+        // Find the last match for this court
+        // court in ScheduleItem is 1-indexed, courtIndex is 0-indexed
+        for (let i = history.length - 1; i >= 0; i--) {
+          if (history[i].court === courtIndex + 1) {
+            lastMatchIndex = i;
+            break;
+          }
+        }
+
+        if (lastMatchIndex === -1) return state; // No history for this court
+
+        const lastMatch = history[lastMatchIndex];
+        history.splice(lastMatchIndex, 1);
+
+        const newActiveMatches = [...state.activeMatches];
+        newActiveMatches[courtIndex] = lastMatch;
+
+        return {
+          matchHistory: history,
+          activeMatches: newActiveMatches
+        };
+      }),
+
       clearMatchHistory: () => set({ matchHistory: [], activeMatches: [], fullSchedule: [] }),
       
       setRounds: (rounds) => set({ rounds }),
@@ -254,6 +284,7 @@ export const useStore = create<AppState>()(
       setMixPartners: (mixPartners) => set({ mixPartners }),
       setAvoidGenderSkew: (avoidGenderSkew) => set({ avoidGenderSkew }),
       setEnableSkillLevel: (enableSkillLevel) => set({ enableSkillLevel }),
+      setSkillMode: (skillMode) => set({ skillMode }),
       setEnableScoring: (enableScoring) => set({ enableScoring }),
       setAutoVoiceEnabled: (autoVoiceEnabled) => set({ autoVoiceEnabled }),
       setFirstMatchPlayerIds: (firstMatchPlayerIds) => set({ firstMatchPlayerIds }),
@@ -292,6 +323,7 @@ export const useStore = create<AppState>()(
         mixPartners: state.mixPartners,
         avoidGenderSkew: state.avoidGenderSkew,
         enableSkillLevel: state.enableSkillLevel,
+        skillMode: state.skillMode,
         enableScoring: state.enableScoring,
         autoVoiceEnabled: state.autoVoiceEnabled,
         fixedPairs: state.fixedPairs,

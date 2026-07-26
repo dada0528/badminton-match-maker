@@ -32,8 +32,10 @@ const MatchResults: React.FC = () => {
     scheduleType,
     errorMsg,
     enableSkillLevel,
+    skillMode,
     updateMatchScore,
     endMatch,
+    undoMatch,
     mixPartners,
     avoidGenderSkew,
     fixedPairs,
@@ -123,7 +125,9 @@ const MatchResults: React.FC = () => {
         scheduleType,
         enableSkillLevel,
         fixedPairs,
-        courtIndex + 1
+        courtIndex + 1,
+        [],
+        skillMode
     );
     
     if (result.error) {
@@ -201,7 +205,7 @@ const MatchResults: React.FC = () => {
       
       for (let i = matchIdx + 1; i < fullSchedule.length; i++) {
          const nextMatchResult = generateNextMatch(
-            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, []
+            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, [], skillMode
          );
          if (nextMatchResult.match) {
              nextMatchResult.match.sequence = i + 1;
@@ -522,12 +526,12 @@ const MatchResults: React.FC = () => {
                          
                          {/* End Match Button */}
                          {!isFullScheduleMode && (
-                             <div className="mt-auto flex justify-center" data-html2canvas-ignore="true">
+                             <div className="mt-auto flex justify-center gap-2" data-html2canvas-ignore="true">
                                 <motion.button
                                    whileHover={{ scale: 1.02 }}
                                    whileTap={{ scale: 0.98 }}
                                    onClick={() => handleEndMatch(idx)}
-                                   className={`w-full py-3 rounded-xl font-bold text-sm transition-colors shadow-sm ${
+                                   className={`flex-1 py-3 rounded-xl font-bold text-sm transition-colors shadow-sm ${
                                        match 
                                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200' 
                                        : 'bg-gradient-to-r from-emerald-400 to-emerald-500 text-white shadow-emerald-500/30'
@@ -535,6 +539,17 @@ const MatchResults: React.FC = () => {
                                 >
                                    {match ? '換下一組' : '開始安排'}
                                 </motion.button>
+                                {matchHistory.some(m => m.court === idx + 1) && (
+                                   <motion.button
+                                     whileHover={{ scale: 1.05 }}
+                                     whileTap={{ scale: 0.95 }}
+                                     onClick={() => undoMatch(idx)}
+                                     title="還原上一場"
+                                     className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-500 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-xl font-bold shadow-sm transition-colors flex items-center justify-center"
+                                   >
+                                      <RotateCw size={18} className="-scale-x-100" />
+                                   </motion.button>
+                                )}
                              </div>
                          )}
                       </motion.div>
@@ -582,6 +597,36 @@ const MatchResults: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* History List */}
+                  {!isFullScheduleMode && matchHistory.length > 0 && (
+                     <div className="px-6 lg:px-8 max-w-5xl mx-auto mt-12" data-html2canvas-ignore="true">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-700">
+                          <h4 className="text-slate-600 dark:text-slate-400 font-black mb-6 flex items-center gap-2 uppercase tracking-wide text-sm">
+                             <Calendar size={16} /> 歷史賽程紀錄 / History
+                          </h4>
+                          <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                             {[...matchHistory].reverse().map((match, i) => (
+                               <div key={match.id} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-slate-700 p-4 rounded-2xl border border-slate-100 dark:border-slate-600 shadow-sm">
+                                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                                     <span className="text-xs font-black text-white bg-slate-800 px-2 py-1 rounded">第 {match.court} 場地</span>
+                                     <span className="text-xs font-bold text-slate-400">{new Date(match.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                  </div>
+                                  <div className="flex-1 flex items-center justify-between sm:justify-start gap-4">
+                                     <div className="flex-1 text-right">
+                                        <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{match.teamA.player1.name} &amp; {match.teamA.player2.name}</span>
+                                     </div>
+                                     <span className="text-xs font-black text-slate-300 dark:text-slate-500">VS</span>
+                                     <div className="flex-1 text-left">
+                                        <span className="text-sm font-bold text-pink-600 dark:text-pink-400">{match.teamB.player1.name} &amp; {match.teamB.player2.name}</span>
+                                     </div>
+                                  </div>
+                               </div>
+                             ))}
+                          </div>
+                        </div>
+                     </div>
+                  )}
 
                   {/* Export Footer */}
                   <div className="mt-12 text-center text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase text-xs">

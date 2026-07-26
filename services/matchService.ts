@@ -1,4 +1,4 @@
-import { Player, Team, Match, MatchType, Gender, ScheduleItem, WaitingPlayerInfo } from '../types';
+import { Player, Team, Match, MatchType, Gender, ScheduleItem, WaitingPlayerInfo, SkillMode } from '../types';
 
 // Fisher-Yates Shuffle
 const shuffle = <T,>(array: T[]): T[] => {
@@ -145,6 +145,7 @@ export const generateNextMatch = (
   fixedPairs: Array<[string, string]> = [],
   courtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
+  skillMode: SkillMode = 'BALANCED'
 ): { match: ScheduleItem | null, error: string | null } => {
   // 1. Filter Pool
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
@@ -286,36 +287,29 @@ export const generateNextMatch = (
           const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
           
           if (s.forcedPlaysRemaining > 0) {
-              return -10000000 + effectivePlayed; // 強制上場
+              return -100000000 + effectivePlayed; // 強制上場極高優先
           }
 
-          let score = 0;
-          if (mixPartners) {
-              // 智慧輪替 (打散)：放寬一點出場數的嚴格限制，加入亂數來打破 A-B-A-B 輪替僵局
-              if (s.consecutivePlays >= 2) {
-                  score += 5000000; // 絕對禁止連打三場
-              } else if (s.consecutiveRests >= 2) {
-                  score -= 5000000; // 絕對禁止連休三場
-              }
-              score += effectivePlayed * 1000;
-              score += Math.random() * 5000;
-          } else {
-              // 核心規則：出場次數最優先
-              score = effectivePlayed * 1000000;
-              
-              if (s.consecutiveRests >= 3) {
-                  score -= 300000;
-              } else if (s.consecutiveRests >= 2) {
-                  score -= 200000; // 在相同出場次數中，連休兩場者最優先上場
-              }
-              score -= s.consecutiveRestTwiceCount * 10000;
+          // 基礎分：出場數最少者優先 (權重10,000,000，保證平均上場)
+          let score = effectivePlayed * 10000000;
 
-              if (s.consecutivePlays >= 1 && s.consecutiveRestTwiceCount === 0) {
-                  score += 500000; // 嚴格做一休一
-              }
-              score -= s.consecutiveRests * 1000;
-              score += Math.random() * 100;
+          // 核心公正輪休規則：
+          // 當有人剛休息 1 場或以上時，極力優先讓休息過的人上場，嚴禁剛打完的人連打而場下的人連休第二場！
+          if (s.consecutiveRests >= 2) {
+              score -= 5000000; // 連休 2 場以上，極高優先上場
+          } else if (s.consecutiveRests === 1) {
+              score -= 2000000; // 已休息 1 場，優先上場
+          } else if (s.consecutivePlays >= 2) {
+              score += 8000000; // 已連打 2 場，強迫下場休息
+          } else if (s.consecutivePlays === 1) {
+              score += 2000000; // 剛打完 1 場，加分排後面，優先讓場下休息的人上
           }
+
+          // 補償過往連休兩場紀錄
+          score -= (s.consecutiveRestTwiceCount || 0) * 50000;
+
+          // 微小隨機微擾 (僅作為相同條件下的打破平手機制，不干擾公正輪休)
+          score += Math.random() * 500;
           
           return score; 
       };
@@ -473,7 +467,31 @@ export const generateNextMatch = (
            const t1Level = (perm.t1[0].level || 3) + (perm.t1[1].level || 3);
            const t2Level = (perm.t2[0].level || 3) + (perm.t2[1].level || 3);
            const levelDiff = Math.abs(t1Level - t2Level);
-           perm.score += (levelDiff * levelDiff * 1000);
+           
+           // 兩隊總戰力差距 0~2 星以內為佳，超過 2 星大幅懲罰
+           perm.score += levelDiff * 20000;
+           if (levelDiff > 2) {
+               perm.score += (levelDiff - 2) * 200000;
+           }
+
+           const pA1Level = perm.t1[0].level || 3;
+           const pA2Level = perm.t1[1].level || 3;
+           const pB1Level = perm.t2[0].level || 3;
+           const pB2Level = perm.t2[1].level || 3;
+
+           if (skillMode === 'STRONG_WEAK') {
+               // 「以強帶弱」模式：隊友之間宜一強一弱 (High + Low)，且兩隊總戰力平衡
+               const teamADiff = Math.abs(pA1Level - pA2Level);
+               const teamBDiff = Math.abs(pB1Level - pB2Level);
+               // 偏好同隊等級差距大，給予獎勵扣分
+               perm.score -= (teamADiff + teamBDiff) * 3000;
+           } else {
+               // 「實力相近」模式：隊友與對手實力階級相近 (High+High vs High+High, Low+Low vs Low+Low)
+               const teamADiff = Math.abs(pA1Level - pA2Level);
+               const teamBDiff = Math.abs(pB1Level - pB2Level);
+               // 偏好同隊等級差距小
+               perm.score += (teamADiff + teamBDiff) * 3000;
+           }
        }
 
        fixedPairs.forEach(([id1, id2]) => {
@@ -530,7 +548,8 @@ export const generateSchedule = (
   courtCount: number = 1, // New parameter for number of courts
   firstMatchPlayerIds: string[] = [], // New parameter for forcing first match players
   enableSkillLevel: boolean = false, // New parameter for skill level balancing
-  fixedPairs: Array<[string, string]> = [] // New parameter for fixed pairs
+  fixedPairs: Array<[string, string]> = [], // New parameter for fixed pairs
+  skillMode: SkillMode = 'BALANCED'
 ): { schedule: ScheduleItem[], error: string | null } => {
 
   // 1. Filter Pool
@@ -616,45 +635,24 @@ export const generateSchedule = (
         if (selectedStats.length === 0) {
             const getScore = (s: PlayerStats): number => {
                if (s.forcedPlaysRemaining > 0) {
-                   return -10000000 + s.played; // 強制上場，給予極端最高優先級
+                   return -100000000 + s.played; // 強制上場極高優先
                }
 
-               let score = 0;
-               if (mixPartners) {
-                   // 智慧輪替 (打散)：放寬一點出場數的嚴格限制，加入亂數來打破 A-B-A-B 輪替僵局
-                   if (s.consecutivePlays >= 2) {
-                       score += 5000000; // 絕對禁止連打三場
-                   } else if (s.consecutiveRests >= 2) {
-                       score -= 5000000; // 絕對禁止連休三場
-                   }
-                   // 出場數仍然重要，但不像之前那麼絕對，讓亂數有機會翻盤 (差1場=1000分)
-                   score += s.played * 1000;
-                   // 加入較大的隨機性 (範圍5000) 讓出場數差一場的人也有可能被選到，從而完美打散 8 人固定分組
-                   score += Math.random() * 5000;
-               } else {
-                   // 核心規則：出場次數最優先，確保最多只差一場
-                   score = s.played * 1000000;
-                   
-                   if (s.consecutiveRests >= 3) {
-                       // 絕對避免連休三場
-                       score -= 300000;
-                   } else if (s.consecutiveRests >= 2) {
-                       // 在相同出場次數中，連休兩場者最優先上場
-                       score -= 200000;
-                   }
+               let score = s.played * 10000000;
 
-                   // 新規則：盡量平攤「連休兩場」的次數
-                   // 如果之前已經有過較多次「連休兩場」，則優先讓他上場，避免再次連休
-                   score -= s.consecutiveRestTwiceCount * 10000;
-
-                   // 固定輪替：嚴格做一休一 (除非已經有連休兩場的委屈紀錄，才稍微通融)
-                   if (s.consecutivePlays >= 1 && s.consecutiveRestTwiceCount === 0) {
-                       score += 500000; // 大幅增加分數，強迫休息
-                   }
-                   // 嚴格優先挑選休息較久的人
-                   score -= s.consecutiveRests * 1000;
-                   score += Math.random() * 100;
+               // 公正輪休機制
+               if (s.consecutiveRests >= 2) {
+                   score -= 5000000; // 連休 2 場以上，極高優先
+               } else if (s.consecutiveRests === 1) {
+                   score -= 2000000; // 已休息 1 場，優先上場
+               } else if (s.consecutivePlays >= 2) {
+                   score += 8000000; // 已連打 2 場，強迫下場休息
+               } else if (s.consecutivePlays === 1) {
+                   score += 2000000; // 剛打完 1 場，加分排後面，優先讓場下休息的人上
                }
+
+               score -= (s.consecutiveRestTwiceCount || 0) * 50000;
+               score += Math.random() * 500;
                
                return score; 
             };
@@ -807,9 +805,30 @@ export const generateSchedule = (
                  const t2Level = (perm.t2[0].level || 3) + (perm.t2[1].level || 3);
                  const levelDiff = Math.abs(t1Level - t2Level);
                  
-                 // Add penalty based on level difference. 
-                 // A difference of 1 is okay, but larger differences should be heavily penalized.
-                 perm.score += (levelDiff * levelDiff * 1000);
+                 // 兩隊總戰力差距 0~2 星以內為佳，超過 2 星大幅懲罰
+                 perm.score += levelDiff * 20000;
+                 if (levelDiff > 2) {
+                     perm.score += (levelDiff - 2) * 200000;
+                 }
+
+                 const pA1Level = perm.t1[0].level || 3;
+                 const pA2Level = perm.t1[1].level || 3;
+                 const pB1Level = perm.t2[0].level || 3;
+                 const pB2Level = perm.t2[1].level || 3;
+
+                 if (skillMode === 'STRONG_WEAK') {
+                     // 「以強帶弱」模式：隊友之間宜一強一弱 (High + Low)，且兩隊總戰力平衡
+                     const teamADiff = Math.abs(pA1Level - pA2Level);
+                     const teamBDiff = Math.abs(pB1Level - pB2Level);
+                     // 偏好同隊等級差距大，給予獎勵扣分
+                     perm.score -= (teamADiff + teamBDiff) * 3000;
+                 } else {
+                     // 「實力相近」模式：隊友與對手實力階級相近
+                     const teamADiff = Math.abs(pA1Level - pA2Level);
+                     const teamBDiff = Math.abs(pB1Level - pB2Level);
+                     // 偏好同隊等級差距小
+                     perm.score += (teamADiff + teamBDiff) * 3000;
+                 }
              }
 
              // Fixed Pairs Check

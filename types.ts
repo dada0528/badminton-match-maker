@@ -5,6 +5,8 @@ export enum Gender {
 
 export type PlayerStatus = 'ACTIVE' | 'SUSPENDED';
 
+export type SkillMode = 'BALANCED' | 'STRONG_WEAK';
+
 export interface Player {
   id: string;
   name: string;
