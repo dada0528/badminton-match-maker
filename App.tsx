@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
-import { motion } from 'motion/react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Users, Calendar, Trophy } from 'lucide-react';
 import Header from './components/Header';
 import PlayerInputSection from './components/PlayerInputSection';
 import ScheduleControls from './components/ScheduleControls';
@@ -7,8 +8,11 @@ import MatchResults from './components/MatchResults';
 import Leaderboard from './components/Leaderboard';
 import { useStore } from './store/useStore';
 
+type Tab = 'players' | 'matches' | 'leaderboard';
+
 const App: React.FC = () => {
   const { errorMsg, history, theme } = useStore();
+  const [activeTab, setActiveTab] = useState<Tab>('players');
 
   // Initialize dark mode
   useEffect(() => {
@@ -43,34 +47,96 @@ const App: React.FC = () => {
 
       <div className="relative z-10 w-full h-full pb-20">
         <Header />
-
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-10 lg:space-y-16">
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-            <PlayerInputSection />
-          </motion.div>
+        
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+          
+          {/* Tabs */}
+          <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-2xl mb-8 backdrop-blur-sm">
+            <button
+              onClick={() => setActiveTab('players')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'players' 
+                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <Users size={18} />
+              <span className="hidden sm:inline">選手名單</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('matches')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'matches' 
+                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <Calendar size={18} />
+              <span className="hidden sm:inline">賽事安排</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'leaderboard' 
+                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'
+              }`}
+            >
+              <Trophy size={18} />
+              <span className="hidden sm:inline">排行榜</span>
+            </button>
+          </div>
 
           {errorMsg && (
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }} 
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-600 dark:text-red-400 px-6 py-4 rounded-xl font-bold shadow-sm flex items-center gap-3 backdrop-blur-sm"
+              className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-600 dark:text-red-400 px-6 py-4 rounded-xl font-bold shadow-sm flex items-center gap-3 backdrop-blur-sm mb-8"
             >
               <div className="bg-red-100 dark:bg-red-900/50 p-2 rounded-full"><span role="img" aria-label="alert">🚨</span></div>
               {errorMsg}
             </motion.div>
           )}
 
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-            <ScheduleControls />
-          </motion.div>
-          
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
-            <MatchResults />
-          </motion.div>
+          <div className="relative">
+            {activeTab === 'players' && (
+              <motion.div 
+                key="players"
+                initial={{ y: 20, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <PlayerInputSection />
+              </motion.div>
+            )}
+            
+            {activeTab === 'matches' && (
+              <motion.div 
+                key="matches"
+                initial={{ y: 20, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-10 lg:space-y-16"
+              >
+                <ScheduleControls />
+                <MatchResults />
+              </motion.div>
+            )}
 
-          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
-            <Leaderboard />
-          </motion.div>
+            {activeTab === 'leaderboard' && (
+              <motion.div 
+                key="leaderboard"
+                initial={{ y: 20, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }} 
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Leaderboard />
+              </motion.div>
+            )}
+          </div>
         </main>
         
         {/* Watermark */}

@@ -11,130 +11,34 @@ const shuffle = <T,>(array: T[]): T[] => {
 };
 
 // Helper to create a unique key for a team (sorted IDs)
-const getTeamKey = (p1: Player, p2: Player): string => {
-  return [p1.id, p2.id].sort().join('-');
+const getTeamKey = (p1: Player | string, p2: Player | string): string => {
+  const id1 = typeof p1 === 'string' ? p1 : p1.id;
+  const id2 = typeof p2 === 'string' ? p2 : p2.id;
+  return [id1, id2].sort().join('-');
 };
+
+const getPartnerKey = getTeamKey;
 
 const createMatch = (t1: [Player, Player], t2: [Player, Player], type: MatchType): Match => ({
     id: Date.now().toString() + Math.random().toString(),
     teamA: { player1: t1[0], player2: t1[1] },
     teamB: { player1: t2[0], player2: t2[1] },
-    type,
-    timestamp: Date.now(),
+    type: type,
+    timestamp: Date.now()
 });
 
-// Single generation attempt
-const generateCandidate = (players: Player[], type: MatchType): { matches: Match[], waiting: Player[], error: string | null } => {
-  let pool = [...players];
-  const matches: Match[] = [];
+interface PlayerStats {
+  player: Player;
+  played: number;
+  virtualPlayed: number;
+  consecutivePlays: number;
+  consecutiveRests: number;
+  consecutiveRestTwiceCount: number;
+  forcedPlaysRemaining: number;
+  lastPlayedIndex: number;
+}
 
-  // Filter logic
-  if (type === MatchType.MENS_DOUBLES) {
-    pool = pool.filter(p => p.gender === Gender.MALE);
-  } else if (type === MatchType.WOMENS_DOUBLES) {
-    pool = pool.filter(p => p.gender === Gender.FEMALE);
-  }
-
-  // Basic validation should be done by caller, but safe to check pool size logic for Mixed
-  if (type === MatchType.MIXED_DOUBLES) {
-    let males = shuffle(players.filter(p => p.gender === Gender.MALE));
-    let females = shuffle(players.filter(p => p.gender === Gender.FEMALE));
-
-    while (males.length >= 2 && females.length >= 2) {
-      matches.push(createMatch([males.pop()!, females.pop()!], [males.pop()!, females.pop()!], type));
-    }
-  } else {
-    // Standard / Single Gender
-    let processingPool = shuffle(pool);
-    while (processingPool.length >= 4) {
-      matches.push(createMatch(
-          [processingPool.pop()!, processingPool.pop()!], 
-          [processingPool.pop()!, processingPool.pop()!], 
-          type
-      ));
-    }
-  }
-
-  // Calculate waiting
-  const playingIds = new Set(matches.flatMap(m => [m.teamA.player1.id, m.teamA.player2.id, m.teamB.player1.id, m.teamB.player2.id]));
-  const waiting = players.filter(p => !playingIds.has(p.id));
-
-  if (matches.length === 0 && type === MatchType.MIXED_DOUBLES) {
-      return { matches: [], waiting: players, error: '混雙需要至少 2 男 2 女！' };
-  }
-
-  return { matches, waiting, error: null };
-};
-
-export const generateMatches = (
-  players: Player[],
-  type: MatchType,
-  previousMatches: Match[] = []
-): { matches: Match[]; waiting: Player[]; error: string | null } => {
-  
-  // 1. Initial Validation
-  let poolCount = players.length;
-  if (type === MatchType.MENS_DOUBLES) poolCount = players.filter(p => p.gender === Gender.MALE).length;
-  if (type === MatchType.WOMENS_DOUBLES) poolCount = players.filter(p => p.gender === Gender.FEMALE).length;
-
-  if (poolCount < 4) {
-    if (type === MatchType.MENS_DOUBLES) return { matches: [], waiting: players, error: '男生人數不足 4 人，無法進行男雙！' };
-    if (type === MatchType.WOMENS_DOUBLES) return { matches: [], waiting: players, error: '女生人數不足 4 人，無法進行女雙！' };
-    return { matches: [], waiting: players, error: '人數不足，至少需要 4 人才能開始比賽！' };
-  }
-
-  // 2. Build avoidance set from previous matches
-  const avoidKeys = new Set<string>();
-  previousMatches.forEach(m => {
-    avoidKeys.add(getTeamKey(m.teamA.player1, m.teamA.player2));
-    avoidKeys.add(getTeamKey(m.teamB.player1, m.teamB.player2));
-  });
-
-  // 3. Try to find the best shuffle (least overlap with previous)
-  let bestResult: { matches: Match[], waiting: Player[], error: string | null } | null = null;
-  let minOverlap = Infinity;
-  
-  // Increase attempts to find a good shuffle
-  const ATTEMPTS = avoidKeys.size > 0 ? 200 : 1;
-
-  for (let i = 0; i < ATTEMPTS; i++) {
-    const result = generateCandidate(players, type);
-    
-    if (result.error) return result; 
-
-    // Calculate overlap score
-    let currentOverlap = 0;
-    result.matches.forEach(m => {
-        // Heavy penalty for same teams
-        if (avoidKeys.has(getTeamKey(m.teamA.player1, m.teamA.player2))) currentOverlap += 10;
-        if (avoidKeys.has(getTeamKey(m.teamB.player1, m.teamB.player2))) currentOverlap += 10;
-        
-        // Minor penalty for same people in same match (even if swapped opponents)
-        // This encourages completely different match compositions
-        previousMatches.forEach(pm => {
-           const currentIds = new Set([m.teamA.player1.id, m.teamA.player2.id, m.teamB.player1.id, m.teamB.player2.id]);
-           const prevIds = new Set([pm.teamA.player1.id, pm.teamA.player2.id, pm.teamB.player1.id, pm.teamB.player2.id]);
-           // Intersection count
-           let common = 0;
-           currentIds.forEach(id => { if(prevIds.has(id)) common++; });
-           if (common === 4) currentOverlap += 1; // Same 4 people playing again
-        });
-    });
-
-    if (currentOverlap < minOverlap) {
-        minOverlap = currentOverlap;
-        bestResult = result;
-    }
-
-    if (minOverlap === 0) break;
-  }
-
-  return bestResult || { matches: [], waiting: players, error: '生成失敗' };
-};
-
-// --- DYNAMIC MATCH GENERATOR ---
-
-export const generateNextMatch = (
+export const generateNextMatchesGroup = (
   allPlayers: Player[],
   matchHistory: ScheduleItem[],
   activeMatches: ScheduleItem[],
@@ -143,42 +47,41 @@ export const generateNextMatch = (
   type: MatchType,
   enableSkillLevel: boolean = false,
   fixedPairs: Array<[string, string]> = [],
-  courtNumber: number = 1,
+  courtsToGenerate: number = 1,
+  startCourtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
-  skillMode: SkillMode = 'BALANCED'
-): { match: ScheduleItem | null, error: string | null } => {
-  // 1. Filter Pool
+  skillMode: SkillMode = 'BALANCED',
+  startSequence: number = 1
+): { matches: ScheduleItem[], error: string | null } => {
+
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
   if (type === MatchType.MENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.MALE);
   if (type === MatchType.WOMENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.FEMALE);
   
-  if (pool.length < 4) return { match: null, error: '人數不足 4 人，無法排程' };
+  if (pool.length < 4) return { matches: [], error: '人數不足 4 人，無法排程' };
+  
+  const targetCourts = Math.min(courtsToGenerate, Math.floor(pool.length / 4));
+  if (targetCourts === 0) return { matches: [], error: '人數不足以分配任何場地' };
+
   if (type === MatchType.MIXED_DOUBLES) {
      const m = pool.filter(p => p.gender === Gender.MALE).length;
      const f = pool.filter(p => p.gender === Gender.FEMALE).length;
-     if (m < 2 || f < 2) return { match: null, error: '混雙需要至少 2 男 2 女' };
+     if (m < targetCourts * 2 || f < targetCourts * 2) return { matches: [], error: `混雙需要至少 ${targetCourts * 2} 男 ${targetCourts * 2} 女` };
   }
 
-  // 2. Initialize Stats and History from matchHistory and activeMatches
-  const statsMap = new Map<string, PlayerStats & { lastPlayedIndex: number }>();
+  const statsMap = new Map<string, PlayerStats>();
   const partnerHistory = new Map<string, number>(); 
   const opponentHistory = new Map<string, number>();
 
-  const getPartnerKey = (p1: Player | string, p2: Player | string) => {
-    const id1 = typeof p1 === 'string' ? p1 : p1.id;
-    const id2 = typeof p2 === 'string' ? p2 : p2.id;
-    return [id1, id2].sort().join('-');
+  const recordPartnership = (id1: string, id2: string, weight: number = 1) => {
+    const key = getPartnerKey(id1, id2);
+    partnerHistory.set(key, (partnerHistory.get(key) || 0) + weight);
   };
   
-  const recordPartnership = (id1: string, id2: string) => {
+  const recordOpponent = (id1: string, id2: string, weight: number = 1) => {
     const key = getPartnerKey(id1, id2);
-    partnerHistory.set(key, (partnerHistory.get(key) || 0) + 1);
+    opponentHistory.set(key, (opponentHistory.get(key) || 0) + weight);
   };
-  
-  const recordOpponent = (id1: string, id2: string) => {
-    const key = getPartnerKey(id1, id2);
-    opponentHistory.set(key, (opponentHistory.get(key) || 0) + 1);
-  }
 
   pool.forEach(p => {
     statsMap.set(p.id, { 
@@ -194,10 +97,18 @@ export const generateNextMatch = (
   });
 
   const allPastMatches = [...matchHistory, ...activeMatches.filter((m): m is ScheduleItem => m !== null)];
-  // Use activeMatches.length as the estimated court count to group batches
   const courtCount = activeMatches.length || 1;
+  const totalBatches = Math.ceil(allPastMatches.length / courtCount);
 
   for (let i = 0; i < allPastMatches.length; i += courtCount) {
+      const batchIndex = Math.floor(i / courtCount);
+      const distance = totalBatches - batchIndex;
+      let weight = 1;
+      if (distance === 1) weight = 100;
+      else if (distance === 2) weight = 30;
+      else if (distance === 3) weight = 10;
+      else if (distance === 4) weight = 3;
+
       const batchMatches = allPastMatches.slice(i, i + courtCount);
       const playersInBatch = new Set<string>();
       
@@ -214,12 +125,12 @@ export const generateNextMatch = (
           playersInBatch.add(p3);
           playersInBatch.add(p4);
 
-          recordPartnership(p1, p2);
-          recordPartnership(p3, p4);
-          recordOpponent(p1, p3);
-          recordOpponent(p1, p4);
-          recordOpponent(p2, p3);
-          recordOpponent(p2, p4);
+          recordPartnership(p1, p2, weight);
+          recordPartnership(p3, p4, weight);
+          recordOpponent(p1, p3, weight);
+          recordOpponent(p1, p4, weight);
+          recordOpponent(p2, p3, weight);
+          recordOpponent(p2, p4, weight);
       });
 
       let activePoolSize = 0;
@@ -261,341 +172,255 @@ export const generateNextMatch = (
     }
   });
 
-  // Filter out players currently playing
   const availableStats = Array.from(statsMap.values()).filter(s => !activePlayerIds.has(s.player.id));
+  if (availableStats.length < targetCourts * 4) {
+      return { matches: [], error: '可用人數不足以分配所選場地數' };
+  }
 
-  // Handle first match forcing logic
-  let selectedPlayersToPlay: (PlayerStats & { lastPlayedIndex: number; virtualPlayed: number })[] = [];
-  
-  if (matchHistory.length === 0 && activeMatches.every(m => m === null) && courtNumber === 1 && firstMatchPlayerIds.length === 4) {
-      selectedPlayersToPlay = availableStats.filter(s => firstMatchPlayerIds.includes(s.player.id));
-      if (selectedPlayersToPlay.length !== 4) {
-          // If we couldn't find all 4, fallback to normal selection
-          selectedPlayersToPlay = [];
+  const getScore = (s: PlayerStats): number => {
+      const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
+      if (s.forcedPlaysRemaining > 0) return -100000000 + effectivePlayed;
+      let score = effectivePlayed * 10000000;
+      if (s.consecutiveRests >= 2) score -= 5000000;
+      else if (s.consecutiveRests === 1) score -= 2000000;
+      else if (s.consecutivePlays >= 2) score += 8000000;
+      else if (s.consecutivePlays === 1) score += 2000000;
+      score -= (s.consecutiveRestTwiceCount || 0) * 50000;
+      score += Math.random() * 500;
+      return score; 
+  };
+
+  const scoreCache = new Map<string, number>();
+  availableStats.forEach(s => scoreCache.set(s.player.id, getScore(s)));
+
+  fixedPairs.forEach(([id1, id2]) => {
+      if (scoreCache.has(id1) && scoreCache.has(id2)) {
+          const avgScore = (scoreCache.get(id1)! + scoreCache.get(id2)!) / 2;
+          scoreCache.set(id1, avgScore);
+          scoreCache.set(id2, avgScore);
       }
-  }
-
-  if (availableStats.length < 4) {
-    return { match: null, error: '可用選手不足 4 人 (其他選手可能正在比賽中)' };
-  }
-
-  // --- SELECTION LOGIC ---
-  let selectedStats = selectedPlayersToPlay;
-
-  if (selectedStats.length !== 4) {
-      const getScore = (s: PlayerStats & { lastPlayedIndex: number; virtualPlayed: number }): number => {
-          const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
-          
-          if (s.forcedPlaysRemaining > 0) {
-              return -100000000 + effectivePlayed; // 強制上場極高優先
-          }
-
-          // 基礎分：出場數最少者優先 (權重10,000,000，保證平均上場)
-          let score = effectivePlayed * 10000000;
-
-          // 核心公正輪休規則：
-          // 當有人剛休息 1 場或以上時，極力優先讓休息過的人上場，嚴禁剛打完的人連打而場下的人連休第二場！
-          if (s.consecutiveRests >= 2) {
-              score -= 5000000; // 連休 2 場以上，極高優先上場
-          } else if (s.consecutiveRests === 1) {
-              score -= 2000000; // 已休息 1 場，優先上場
-          } else if (s.consecutivePlays >= 2) {
-              score += 8000000; // 已連打 2 場，強迫下場休息
-          } else if (s.consecutivePlays === 1) {
-              score += 2000000; // 剛打完 1 場，加分排後面，優先讓場下休息的人上
-          }
-
-          // 補償過往連休兩場紀錄
-          score -= (s.consecutiveRestTwiceCount || 0) * 50000;
-
-          // 微小隨機微擾 (僅作為相同條件下的打破平手機制，不干擾公正輪休)
-          score += Math.random() * 500;
-          
-          return score; 
-      };
-
-      const scoreCache = new Map<string, number>();
-      availableStats.forEach(s => scoreCache.set(s.player.id, getScore(s)));
-
-      // Adjust scores for fixed pairs
-      fixedPairs.forEach(([id1, id2]) => {
-          if (scoreCache.has(id1) && scoreCache.has(id2)) {
-              const avgScore = (scoreCache.get(id1)! + scoreCache.get(id2)!) / 2;
-              scoreCache.set(id1, avgScore);
-              scoreCache.set(id2, avgScore);
-          }
-      });
-
-      availableStats.sort((a, b) => {
-          const scoreA = scoreCache.get(a.player.id)!;
-          const scoreB = scoreCache.get(b.player.id)!;
-          if (scoreA !== scoreB) return scoreA - scoreB;
-          return Math.random() - 0.5;
-      });
-
-      if (type === MatchType.MIXED_DOUBLES) {
-          let mCount = 0;
-          let fCount = 0;
-          // Count initially forced players if any (though usually if forced, length == 4 and this block is skipped)
-          for (const s of selectedStats) {
-              if (s.player.gender === Gender.MALE) mCount++;
-              else fCount++;
-          }
-          
-          for (const s of availableStats) {
-              if (mCount === 2 && fCount === 2) break;
-              if (selectedStats.includes(s)) continue;
-              
-              const isMale = s.player.gender === Gender.MALE;
-              if (isMale && mCount === 2) continue;
-              if (!isMale && fCount === 2) continue;
-
-              const pair = fixedPairs.find(p => p.includes(s.player.id));
-              if (pair) {
-                  const partnerId = pair[0] === s.player.id ? pair[1] : pair[0];
-                  
-                  if (selectedStats.some(ps => ps.player.id === partnerId)) {
-                      selectedStats.push(s);
-                      if (isMale) mCount++; else fCount++;
-                      continue;
-                  }
-
-                  const partnerStat = availableStats.find(ps => ps.player.id === partnerId);
-                  if (partnerStat && !selectedStats.includes(partnerStat)) {
-                      const partnerIsMale = partnerStat.player.gender === Gender.MALE;
-                      const newMCount = mCount + (isMale ? 1 : 0) + (partnerIsMale ? 1 : 0);
-                      const newFCount = fCount + (!isMale ? 1 : 0) + (!partnerIsMale ? 1 : 0);
-                      
-                      if (newMCount <= 2 && newFCount <= 2) {
-                          selectedStats.push(s, partnerStat);
-                          mCount = newMCount;
-                          fCount = newFCount;
-                      }
-                      continue;
-                  } else {
-                      continue;
-                  }
-              } else {
-                  selectedStats.push(s);
-                  if (isMale) mCount++; else fCount++;
-              }
-          }
-          if (mCount < 2 || fCount < 2) {
-              return { match: null, error: '無法湊齊混雙所需的男女比例 (可能受固定搭檔或比賽中選手影響)' };
-          }
-      } else {
-          let count = selectedStats.length;
-          for (const s of availableStats) {
-              if (count === 4) break;
-              if (selectedStats.includes(s)) continue;
-
-              const pair = fixedPairs.find(p => p.includes(s.player.id));
-              if (pair) {
-                  const partnerId = pair[0] === s.player.id ? pair[1] : pair[0];
-                  
-                  if (selectedStats.some(ps => ps.player.id === partnerId)) {
-                      selectedStats.push(s);
-                      count++;
-                      continue;
-                  }
-
-                  const partnerStat = availableStats.find(ps => ps.player.id === partnerId);
-                  if (partnerStat && !selectedStats.includes(partnerStat)) {
-                      if (count + 2 <= 4) {
-                          selectedStats.push(s, partnerStat);
-                          count += 2;
-                      }
-                      continue;
-                  } else {
-                      continue;
-                  }
-              } else {
-                  selectedStats.push(s);
-                  count++;
-              }
-          }
-          if (count < 4) {
-              return { match: null, error: '無法湊齊 4 人' };
-          }
-      }
-  }
-
-  const selectedPlayers = selectedStats.map(s => s.player);
-
-  // --- FORM TEAMS ---
-  let t1: [Player, Player], t2: [Player, Player];
-  let chosenPermutation: { t1: [Player, Player], t2: [Player, Player] } | null = null;
-  let permutations: Array<{ t1: [Player, Player], t2: [Player, Player], score: number }> = [];
-
-  if (type === MatchType.MIXED_DOUBLES) {
-      const m = selectedPlayers.filter(p => p.gender === Gender.MALE);
-      const f = selectedPlayers.filter(p => p.gender === Gender.FEMALE);
-      permutations.push({ t1: [m[0], f[0]], t2: [m[1], f[1]], score: 0 });
-      permutations.push({ t1: [m[0], f[1]], t2: [m[1], f[0]], score: 0 });
-  } else {
-      const p = selectedPlayers;
-      permutations.push({ t1: [p[0], p[1]], t2: [p[2], p[3]], score: 0 });
-      permutations.push({ t1: [p[0], p[2]], t2: [p[1], p[3]], score: 0 });
-      permutations.push({ t1: [p[0], p[3]], t2: [p[1], p[2]], score: 0 });
-  }
-  
-  permutations.forEach(perm => {
-       if (mixPartners) {
-           let pScore = 0;
-           pScore += (partnerHistory.get(getPartnerKey(perm.t1[0], perm.t1[1])) || 0);
-           pScore += (partnerHistory.get(getPartnerKey(perm.t2[0], perm.t2[1])) || 0);
-
-           let oppScore = 0;
-           oppScore += (opponentHistory.get(getPartnerKey(perm.t1[0], perm.t2[0])) || 0);
-           oppScore += (opponentHistory.get(getPartnerKey(perm.t1[0], perm.t2[1])) || 0);
-           oppScore += (opponentHistory.get(getPartnerKey(perm.t1[1], perm.t2[0])) || 0);
-           oppScore += (opponentHistory.get(getPartnerKey(perm.t1[1], perm.t2[1])) || 0);
-           
-           perm.score += (pScore * 10) + (oppScore * 2);
-       }
-
-       if (avoidGenderSkew) {
-           const t1Males = (perm.t1[0].gender === Gender.MALE ? 1 : 0) + (perm.t1[1].gender === Gender.MALE ? 1 : 0);
-           const t2Males = (perm.t2[0].gender === Gender.MALE ? 1 : 0) + (perm.t2[1].gender === Gender.MALE ? 1 : 0);
-           
-           if ((t1Males === 2 && t2Males === 0) || (t1Males === 0 && t2Males === 2)) {
-               perm.score += 50000;
-           }
-       }
-
-       if (enableSkillLevel) {
-           const t1Level = (perm.t1[0].level || 3) + (perm.t1[1].level || 3);
-           const t2Level = (perm.t2[0].level || 3) + (perm.t2[1].level || 3);
-           const levelDiff = Math.abs(t1Level - t2Level);
-           
-           // 兩隊總戰力差距 0~2 星以內為佳，超過 2 星大幅懲罰
-           perm.score += levelDiff * 20000;
-           if (levelDiff > 2) {
-               perm.score += (levelDiff - 2) * 200000;
-           }
-
-           const pA1Level = perm.t1[0].level || 3;
-           const pA2Level = perm.t1[1].level || 3;
-           const pB1Level = perm.t2[0].level || 3;
-           const pB2Level = perm.t2[1].level || 3;
-
-           if (skillMode === 'STRONG_WEAK') {
-               // 「以強帶弱」模式：隊友之間宜一強一弱 (High + Low)，且兩隊總戰力平衡
-               const teamADiff = Math.abs(pA1Level - pA2Level);
-               const teamBDiff = Math.abs(pB1Level - pB2Level);
-               // 偏好同隊等級差距大，給予獎勵扣分
-               perm.score -= (teamADiff + teamBDiff) * 3000;
-           } else {
-               // 「實力相近」模式：隊友與對手實力階級相近 (High+High vs High+High, Low+Low vs Low+Low)
-               const teamADiff = Math.abs(pA1Level - pA2Level);
-               const teamBDiff = Math.abs(pB1Level - pB2Level);
-               // 偏好同隊等級差距小
-               perm.score += (teamADiff + teamBDiff) * 3000;
-           }
-       }
-
-       fixedPairs.forEach(([id1, id2]) => {
-           const oneInT1OneInT2 = ((perm.t1[0].id === id1 || perm.t1[1].id === id1) && (perm.t2[0].id === id2 || perm.t2[1].id === id2)) ||
-                                  ((perm.t2[0].id === id1 || perm.t2[1].id === id1) && (perm.t1[0].id === id2 || perm.t1[1].id === id2));
-           
-           if (oneInT1OneInT2) {
-               perm.score += 1000000;
-           }
-       });
   });
 
-  permutations.sort((a, b) => {
-      if (a.score !== b.score) return a.score - b.score;
+  availableStats.sort((a, b) => {
+      const scoreA = scoreCache.get(a.player.id)!;
+      const scoreB = scoreCache.get(b.player.id)!;
+      if (scoreA !== scoreB) return scoreA - scoreB;
       return Math.random() - 0.5;
   });
 
-  chosenPermutation = permutations[0];
-  t1 = chosenPermutation!.t1;
-  t2 = chosenPermutation!.t2;
+  // Re-roll candidates: Add extra players for outlier optimization
+  const extraCandidates = 4;
+  
+  let candidateStats: PlayerStats[] = [];
+  if (type === MatchType.MIXED_DOUBLES) {
+      const mStats = availableStats.filter(s => s.player.gender === Gender.MALE);
+      const fStats = availableStats.filter(s => s.player.gender === Gender.FEMALE);
+      candidateStats = [
+          ...mStats.slice(0, targetCourts * 2 + extraCandidates),
+          ...fStats.slice(0, targetCourts * 2 + extraCandidates)
+      ];
+  } else {
+      candidateStats = availableStats.slice(0, targetCourts * 4 + extraCandidates);
+  }
 
-  const match: ScheduleItem = {
-      id: Date.now().toString() + Math.random().toString(),
-      teamA: { player1: t1[0], player2: t1[1] },
-      teamB: { player1: t2[0], player2: t2[1] },
-      type,
-      timestamp: Date.now(),
-      sequence: matchHistory.length + activeMatches.length + 1,
-      court: courtNumber,
-      waiting: []
+  // Handle first match explicit forcing
+  if (allPastMatches.length === 0 && startCourtNumber === 1 && firstMatchPlayerIds.length === 4) {
+      const forcedStats = availableStats.filter(s => firstMatchPlayerIds.includes(s.player.id));
+      if (forcedStats.length === 4) {
+          let isValid = true;
+          if (type === MatchType.MIXED_DOUBLES) {
+              const m = forcedStats.filter(s => s.player.gender === Gender.MALE).length;
+              const f = forcedStats.filter(s => s.player.gender === Gender.FEMALE).length;
+              if (m !== 2 || f !== 2) isValid = false;
+          }
+          if (isValid) {
+              const t1: [Player, Player] = [forcedStats[0].player, forcedStats[1].player];
+              const t2: [Player, Player] = [forcedStats[2].player, forcedStats[3].player];
+              const match = createMatch(t1, t2, type);
+              return { 
+                matches: [{ ...match, court: startCourtNumber, sequence: startSequence }],
+                error: null
+              };
+          }
+      }
+  }
+
+  // --- MONTE CARLO SEARCH ---
+  let bestCost = Infinity;
+  let bestMatches: Array<{t1: PlayerStats[], t2: PlayerStats[]}> = [];
+
+  const calculateMatchPenalty = (t1: PlayerStats[], t2: PlayerStats[]) => {
+      let penalty = 0;
+      
+      const pA = getPartnerKey(t1[0].player, t1[1].player);
+      const pB = getPartnerKey(t2[0].player, t2[1].player);
+      penalty += (partnerHistory.get(pA) || 0) * 10000;
+      penalty += (partnerHistory.get(pB) || 0) * 10000;
+      
+      if (!mixPartners) {
+          penalty -= (partnerHistory.get(pA) || 0) * 10000;
+          penalty -= (partnerHistory.get(pB) || 0) * 10000;
+      }
+
+      const o1 = getPartnerKey(t1[0].player, t2[0].player);
+      const o2 = getPartnerKey(t1[0].player, t2[1].player);
+      const o3 = getPartnerKey(t1[1].player, t2[0].player);
+      const o4 = getPartnerKey(t1[1].player, t2[1].player);
+      penalty += ((opponentHistory.get(o1) || 0) + (opponentHistory.get(o2) || 0) + 
+                  (opponentHistory.get(o3) || 0) + (opponentHistory.get(o4) || 0)) * 2000;
+
+      fixedPairs.forEach(([id1, id2]) => {
+          const inT1 = t1.some(p => p.player.id === id1) && t1.some(p => p.player.id === id2);
+          const inT2 = t2.some(p => p.player.id === id1) && t2.some(p => p.player.id === id2);
+          const anyPresent = t1.some(p => p.player.id === id1 || p.player.id === id2) || 
+                             t2.some(p => p.player.id === id1 || p.player.id === id2);
+          if (anyPresent && !inT1 && !inT2) penalty += 10000000; 
+      });
+
+      if (avoidGenderSkew && type !== MatchType.MIXED_DOUBLES) {
+          const t1M = t1.filter(p => p.player.gender === Gender.MALE).length;
+          const t2M = t2.filter(p => p.player.gender === Gender.MALE).length;
+          if ((t1M === 2 && t2M === 0) || (t1M === 0 && t2M === 2)) penalty += 1000000;
+      }
+
+      if (enableSkillLevel) {
+          const t1Level = (t1[0].player.level || 3) + (t1[1].player.level || 3);
+          const t2Level = (t2[0].player.level || 3) + (t2[1].player.level || 3);
+          const levelDiff = Math.abs(t1Level - t2Level);
+          
+          penalty += levelDiff * 20000;
+          if (levelDiff > 2) penalty += (levelDiff - 2) * 200000;
+
+          const pA1 = t1[0].player.level || 3;
+          const pA2 = t1[1].player.level || 3;
+          const pB1 = t2[0].player.level || 3;
+          const pB2 = t2[1].player.level || 3;
+
+          const teamADiff = Math.abs(pA1 - pA2);
+          const teamBDiff = Math.abs(pB1 - pB2);
+
+          if (skillMode === 'STRONG_WEAK') {
+              penalty -= (teamADiff + teamBDiff) * 3000;
+          } else {
+              penalty += (teamADiff + teamBDiff) * 3000;
+          }
+      }
+
+      return penalty;
   };
 
-  return { match, error: null };
+  const iterations = 10000;
+  
+  for (let i = 0; i < iterations; i++) {
+     let selected: PlayerStats[];
+     if (type === MatchType.MIXED_DOUBLES) {
+         const mStats = candidateStats.filter(s => s.player.gender === Gender.MALE);
+         const fStats = candidateStats.filter(s => s.player.gender === Gender.FEMALE);
+         selected = [ 
+             ...shuffle(mStats).slice(0, targetCourts * 2), 
+             ...shuffle(fStats).slice(0, targetCourts * 2) 
+         ];
+     } else {
+         selected = shuffle(candidateStats).slice(0, targetCourts * 4);
+     }
+
+     let valid = true;
+     let cost = 0;
+     const matches: Array<{t1: PlayerStats[], t2: PlayerStats[]}> = [];
+
+     for(const s of selected) cost += scoreCache.get(s.player.id)!;
+
+     // Stop early if priority cost alone is already worse than bestCost (huge optimization)
+     if (cost > bestCost) continue;
+
+     // Partition into courts
+     if (type === MatchType.MIXED_DOUBLES) {
+         const males = shuffle(selected.filter(p => p.player.gender === Gender.MALE));
+         const females = shuffle(selected.filter(p => p.player.gender === Gender.FEMALE));
+         for(let c = 0; c < targetCourts; c++) {
+             const m0 = males[c*2], m1 = males[c*2+1];
+             const f0 = females[c*2], f1 = females[c*2+1];
+             const teamArrangement = Math.random() < 0.5;
+             const t1 = [m0, teamArrangement ? f0 : f1];
+             const t2 = [m1, teamArrangement ? f1 : f0];
+             const penalty = calculateMatchPenalty(t1, t2);
+             cost += penalty;
+             matches.push({t1, t2});
+         }
+     } else {
+         selected = shuffle(selected);
+         for(let c = 0; c < targetCourts; c++) {
+             const p = selected.slice(c * 4, c * 4 + 4);
+             const arr = Math.floor(Math.random() * 3);
+             let t1, t2;
+             if (arr === 0) { t1 = [p[0], p[1]]; t2 = [p[2], p[3]]; }
+             else if (arr === 1) { t1 = [p[0], p[2]]; t2 = [p[1], p[3]]; }
+             else { t1 = [p[0], p[3]]; t2 = [p[1], p[2]]; }
+             
+             const penalty = calculateMatchPenalty(t1, t2);
+             cost += penalty;
+             matches.push({t1, t2});
+         }
+     }
+     
+     if (valid && cost < bestCost) {
+         bestCost = cost;
+         bestMatches = matches;
+     }
+  }
+
+  const generatedMatches: ScheduleItem[] = [];
+  bestMatches.forEach((m, idx) => {
+      const match = createMatch(
+          [m.t1[0].player, m.t1[1].player],
+          [m.t2[0].player, m.t2[1].player],
+          type
+      );
+      generatedMatches.push({
+          ...match,
+          court: startCourtNumber + idx,
+          sequence: startSequence + idx
+      });
+  });
+
+  return { matches: generatedMatches, error: null };
 };
 
-// --- SCHEDULE GENERATOR ---
-
-interface PlayerStats {
-  player: Player;
-  played: number;
-  virtualPlayed?: number;
-  consecutivePlays: number;
-  consecutiveRests: number;
-  consecutiveRestTwiceCount: number;
-  forcedPlaysRemaining: number;
+export const generateNextMatch = (
+  allPlayers: Player[],
+  matchHistory: ScheduleItem[],
+  activeMatches: ScheduleItem[],
+  mixPartners: boolean,
+  avoidGenderSkew: boolean,
+  type: MatchType,
+  enableSkillLevel: boolean = false,
+  fixedPairs: Array<[string, string]> = [],
+  courtNumber: number = 1,
+  firstMatchPlayerIds: string[] = [],
+  skillMode: SkillMode = 'BALANCED'
+): { match: ScheduleItem | null, error: string | null } => {
+    const result = generateNextMatchesGroup(
+        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode
+    );
+    if (result.error || result.matches.length === 0) return { match: null, error: result.error };
+    return { match: result.matches[0], error: null };
 }
 
 export const generateSchedule = (
   allPlayers: Player[],
   rounds: number,
-  mixPartners: boolean, // Renamed from shuffleTeams to mixPartners to be more explicit
-  avoidGenderSkew: boolean, // New parameter to avoid MM vs FF
+  mixPartners: boolean, 
+  avoidGenderSkew: boolean, 
   type: MatchType,
-  courtCount: number = 1, // New parameter for number of courts
-  firstMatchPlayerIds: string[] = [], // New parameter for forcing first match players
-  enableSkillLevel: boolean = false, // New parameter for skill level balancing
-  fixedPairs: Array<[string, string]> = [], // New parameter for fixed pairs
+  courtCount: number = 1, 
+  firstMatchPlayerIds: string[] = [], 
+  enableSkillLevel: boolean = false, 
+  fixedPairs: Array<[string, string]> = [], 
   skillMode: SkillMode = 'BALANCED'
 ): { schedule: ScheduleItem[], error: string | null } => {
 
-  // 1. Filter Pool
-  let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
-  if (type === MatchType.MENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.MALE);
-  if (type === MatchType.WOMENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.FEMALE);
-  
-  if (pool.length < 4) return { schedule: [], error: '人數不足 4 人，無法排程' };
-  if (type === MatchType.MIXED_DOUBLES) {
-     const m = pool.filter(p => p.gender === Gender.MALE).length;
-     const f = pool.filter(p => p.gender === Gender.FEMALE).length;
-     if (m < 2 || f < 2) return { schedule: [], error: '混雙需要至少 2 男 2 女' };
-  }
-
-  // 2. Initialize Stats and History
-  const statsMap = new Map<string, PlayerStats>();
-  // Track how many times players have partnered. Key: "id1-id2" (sorted), Value: count
-  const partnerHistory = new Map<string, number>(); 
-  // Track how many times players have been opponents. Key: "id1-id2" (sorted), Value: count
-  const opponentHistory = new Map<string, number>();
-
-  const getPartnerKey = (p1: Player, p2: Player) => [p1.id, p2.id].sort().join('-');
-  
-  // Update helpers
-  const recordPartnership = (p1: Player, p2: Player) => {
-    const key = getPartnerKey(p1, p2);
-    partnerHistory.set(key, (partnerHistory.get(key) || 0) + 1);
-  };
-  
-  const recordOpponent = (p1: Player, p2: Player) => {
-    const key = getPartnerKey(p1, p2);
-    opponentHistory.set(key, (opponentHistory.get(key) || 0) + 1);
-  }
-
-  pool.forEach(p => {
-    statsMap.set(p.id, { 
-      player: p, 
-      played: 0, 
-      consecutivePlays: 0, 
-      consecutiveRests: 0,
-      consecutiveRestTwiceCount: 0,
-      forcedPlaysRemaining: 0
-    });
-  });
-
   const schedule: ScheduleItem[] = [];
+  const pool = allPlayers.filter(p => p.status !== 'SUSPENDED');
   const totalSlotsNeeded = pool.length * rounds;
   const totalMatches = Math.ceil(totalSlotsNeeded / 4);
   
@@ -603,315 +428,132 @@ export const generateSchedule = (
   let roundNumber = 1;
 
   while (currentMatchCount < totalMatches) {
-    const matchesInThisBatch: ScheduleItem[] = [];
-    const playersInThisBatch = new Set<string>();
-    
-    // Try to fill all courts
-    for (let c = 0; c < courtCount; c++) {
-        if (currentMatchCount >= totalMatches) break;
+      const remainingMatches = totalMatches - currentMatchCount;
+      const courtsToGenerate = Math.min(courtCount, remainingMatches);
+      
+      const result = generateNextMatchesGroup(
+          allPlayers,
+          schedule,
+          [],
+          mixPartners,
+          avoidGenderSkew,
+          type,
+          enableSkillLevel,
+          fixedPairs,
+          courtsToGenerate,
+          1,
+          roundNumber === 1 ? firstMatchPlayerIds : [],
+          skillMode,
+          currentMatchCount + 1
+      );
 
-        // Filter out players already selected in this batch
-        const currentStats = Array.from(statsMap.values()).filter(s => !playersInThisBatch.has(s.player.id));
-        
-        // --- SELECTION LOGIC (Who Plays) ---
-        let selectedStats: PlayerStats[] = [];
+      if (result.error) return { schedule: [], error: result.error };
+      if (result.matches.length === 0) break;
 
-        // Check if we need to force the first match players
-        if (roundNumber === 1 && c === 0 && firstMatchPlayerIds.length === 4) {
-            const forcedStats = currentStats.filter(s => firstMatchPlayerIds.includes(s.player.id));
-            if (forcedStats.length === 4) {
-                let isValid = true;
-                if (type === MatchType.MIXED_DOUBLES) {
-                    const m = forcedStats.filter(s => s.player.gender === Gender.MALE).length;
-                    const f = forcedStats.filter(s => s.player.gender === Gender.FEMALE).length;
-                    if (m !== 2 || f !== 2) isValid = false;
-                }
-                if (isValid) {
-                    selectedStats = forcedStats;
-                }
-            }
-        }
-
-        if (selectedStats.length === 0) {
-            const getScore = (s: PlayerStats): number => {
-               if (s.forcedPlaysRemaining > 0) {
-                   return -100000000 + s.played; // 強制上場極高優先
-               }
-
-               let score = s.played * 10000000;
-
-               // 公正輪休機制
-               if (s.consecutiveRests >= 2) {
-                   score -= 5000000; // 連休 2 場以上，極高優先
-               } else if (s.consecutiveRests === 1) {
-                   score -= 2000000; // 已休息 1 場，優先上場
-               } else if (s.consecutivePlays >= 2) {
-                   score += 8000000; // 已連打 2 場，強迫下場休息
-               } else if (s.consecutivePlays === 1) {
-                   score += 2000000; // 剛打完 1 場，加分排後面，優先讓場下休息的人上
-               }
-
-               score -= (s.consecutiveRestTwiceCount || 0) * 50000;
-               score += Math.random() * 500;
-               
-               return score; 
-            };
-        
-            // Cache scores to ensure stable sorting since getScore uses Math.random()
-            const scoreCache = new Map<string, number>();
-            currentStats.forEach(s => scoreCache.set(s.player.id, getScore(s)));
-
-            // Adjust scores for fixed pairs so they are selected together
-            fixedPairs.forEach(([id1, id2]) => {
-                if (scoreCache.has(id1) && scoreCache.has(id2)) {
-                    const avgScore = (scoreCache.get(id1)! + scoreCache.get(id2)!) / 2;
-                    scoreCache.set(id1, avgScore);
-                    scoreCache.set(id2, avgScore);
-                }
-            });
-
-            currentStats.sort((a, b) => {
-                const scoreA = scoreCache.get(a.player.id)!;
-                const scoreB = scoreCache.get(b.player.id)!;
-                if (scoreA !== scoreB) return scoreA - scoreB;
-                return Math.random() - 0.5;
-            });
-        
-            if (type === MatchType.MIXED_DOUBLES) {
-                let mCount = selectedStats.filter(s => s.player.gender === Gender.MALE).length;
-                let fCount = selectedStats.filter(s => s.player.gender === Gender.FEMALE).length;
-                for (const s of currentStats) {
-                    if (mCount === 2 && fCount === 2) break;
-                    if (selectedStats.includes(s)) continue;
-                    
-                    const isMale = s.player.gender === Gender.MALE;
-                    if (isMale && mCount === 2) continue;
-                    if (!isMale && fCount === 2) continue;
-
-                    const pair = fixedPairs.find(p => p.includes(s.player.id));
-                    if (pair) {
-                        const partnerId = pair[0] === s.player.id ? pair[1] : pair[0];
-                        
-                        if (selectedStats.some(ps => ps.player.id === partnerId)) {
-                            selectedStats.push(s);
-                            if (isMale) mCount++; else fCount++;
-                            continue;
-                        }
-
-                        const partnerStat = currentStats.find(ps => ps.player.id === partnerId);
-                        if (partnerStat && !selectedStats.includes(partnerStat)) {
-                            const partnerIsMale = partnerStat.player.gender === Gender.MALE;
-                            const newMCount = mCount + (isMale ? 1 : 0) + (partnerIsMale ? 1 : 0);
-                            const newFCount = fCount + (!isMale ? 1 : 0) + (!partnerIsMale ? 1 : 0);
-                            
-                            if (newMCount <= 2 && newFCount <= 2) {
-                                selectedStats.push(s, partnerStat);
-                                mCount = newMCount;
-                                fCount = newFCount;
-                            }
-                            continue;
-                        } else {
-                            continue; // Partner not available, skip
-                        }
-                    } else {
-                        selectedStats.push(s);
-                        if (isMale) mCount++; else fCount++;
-                    }
-                }
-            } else {
-                let count = selectedStats.length;
-                for (const s of currentStats) {
-                    if (count === 4) break;
-                    if (selectedStats.includes(s)) continue;
-
-                    const pair = fixedPairs.find(p => p.includes(s.player.id));
-                    if (pair) {
-                        const partnerId = pair[0] === s.player.id ? pair[1] : pair[0];
-                        
-                        if (selectedStats.some(ps => ps.player.id === partnerId)) {
-                            selectedStats.push(s);
-                            count++;
-                            continue;
-                        }
-
-                        const partnerStat = currentStats.find(ps => ps.player.id === partnerId);
-                        if (partnerStat && !selectedStats.includes(partnerStat)) {
-                            if (count + 2 <= 4) {
-                                selectedStats.push(s, partnerStat);
-                                count += 2;
-                            }
-                            continue;
-                        } else {
-                            continue; // Partner not available, skip
-                        }
-                    } else {
-                        selectedStats.push(s);
-                        count++;
-                    }
-                }
-            }
-        }
-        
-        const selectedPlayers = selectedStats.map(s => s.player);
-    
-        if (selectedPlayers.length < 4) continue; // Skip if not enough players
-        
-        // Mark as selected for this batch
-        selectedPlayers.forEach(p => playersInThisBatch.add(p.id));
-    
-        // --- FORM TEAMS (Smart Pairing) ---
-        let t1: [Player, Player], t2: [Player, Player];
-        let chosenPermutation: { t1: [Player, Player], t2: [Player, Player] } | null = null;
-        let permutations: Array<{ t1: [Player, Player], t2: [Player, Player], score: number }> = [];
-    
-        if (type === MatchType.MIXED_DOUBLES) {
-            const m = selectedPlayers.filter(p => p.gender === Gender.MALE);
-            const f = selectedPlayers.filter(p => p.gender === Gender.FEMALE);
-            permutations.push({ t1: [m[0], f[0]], t2: [m[1], f[1]], score: 0 });
-            permutations.push({ t1: [m[0], f[1]], t2: [m[1], f[0]], score: 0 });
-        } else {
-            const p = selectedPlayers;
-            permutations.push({ t1: [p[0], p[1]], t2: [p[2], p[3]], score: 0 });
-            permutations.push({ t1: [p[0], p[2]], t2: [p[1], p[3]], score: 0 });
-            permutations.push({ t1: [p[0], p[3]], t2: [p[1], p[2]], score: 0 });
-        }
-        
-        permutations.forEach(perm => {
-             if (mixPartners) {
-                 let pScore = 0;
-                 pScore += (partnerHistory.get(getPartnerKey(perm.t1[0], perm.t1[1])) || 0);
-                 pScore += (partnerHistory.get(getPartnerKey(perm.t2[0], perm.t2[1])) || 0);
-    
-                 let oppScore = 0;
-                 oppScore += (opponentHistory.get(getPartnerKey(perm.t1[0], perm.t2[0])) || 0);
-                 oppScore += (opponentHistory.get(getPartnerKey(perm.t1[0], perm.t2[1])) || 0);
-                 oppScore += (opponentHistory.get(getPartnerKey(perm.t1[1], perm.t2[0])) || 0);
-                 oppScore += (opponentHistory.get(getPartnerKey(perm.t1[1], perm.t2[1])) || 0);
-                 
-                 perm.score += (pScore * 10) + (oppScore * 2);
-             }
-    
-             if (avoidGenderSkew) {
-                 const t1Males = (perm.t1[0].gender === Gender.MALE ? 1 : 0) + (perm.t1[1].gender === Gender.MALE ? 1 : 0);
-                 const t2Males = (perm.t2[0].gender === Gender.MALE ? 1 : 0) + (perm.t2[1].gender === Gender.MALE ? 1 : 0);
-                 
-                 if ((t1Males === 2 && t2Males === 0) || (t1Males === 0 && t2Males === 2)) {
-                     perm.score += 50000;
-                 }
-             }
-
-             if (enableSkillLevel) {
-                 const t1Level = (perm.t1[0].level || 3) + (perm.t1[1].level || 3);
-                 const t2Level = (perm.t2[0].level || 3) + (perm.t2[1].level || 3);
-                 const levelDiff = Math.abs(t1Level - t2Level);
-                 
-                 // 兩隊總戰力差距 0~2 星以內為佳，超過 2 星大幅懲罰
-                 perm.score += levelDiff * 20000;
-                 if (levelDiff > 2) {
-                     perm.score += (levelDiff - 2) * 200000;
-                 }
-
-                 const pA1Level = perm.t1[0].level || 3;
-                 const pA2Level = perm.t1[1].level || 3;
-                 const pB1Level = perm.t2[0].level || 3;
-                 const pB2Level = perm.t2[1].level || 3;
-
-                 if (skillMode === 'STRONG_WEAK') {
-                     // 「以強帶弱」模式：隊友之間宜一強一弱 (High + Low)，且兩隊總戰力平衡
-                     const teamADiff = Math.abs(pA1Level - pA2Level);
-                     const teamBDiff = Math.abs(pB1Level - pB2Level);
-                     // 偏好同隊等級差距大，給予獎勵扣分
-                     perm.score -= (teamADiff + teamBDiff) * 3000;
-                 } else {
-                     // 「實力相近」模式：隊友與對手實力階級相近
-                     const teamADiff = Math.abs(pA1Level - pA2Level);
-                     const teamBDiff = Math.abs(pB1Level - pB2Level);
-                     // 偏好同隊等級差距小
-                     perm.score += (teamADiff + teamBDiff) * 3000;
-                 }
-             }
-
-             // Fixed Pairs Check
-             fixedPairs.forEach(([id1, id2]) => {
-                 const oneInT1OneInT2 = ((perm.t1[0].id === id1 || perm.t1[1].id === id1) && (perm.t2[0].id === id2 || perm.t2[1].id === id2)) ||
-                                        ((perm.t2[0].id === id1 || perm.t2[1].id === id1) && (perm.t1[0].id === id2 || perm.t1[1].id === id2));
-                 
-                 if (oneInT1OneInT2) {
-                     perm.score += 1000000; // Huge penalty to prevent splitting fixed pairs
-                 }
-             });
-        });
-    
-        permutations.sort((a, b) => {
-            if (a.score !== b.score) return a.score - b.score;
-            return Math.random() - 0.5;
-        });
-    
-        chosenPermutation = permutations[0];
-        t1 = chosenPermutation!.t1;
-        t2 = chosenPermutation!.t2;
-    
-        recordPartnership(t1[0], t1[1]);
-        recordPartnership(t2[0], t2[1]);
-        recordOpponent(t1[0], t2[0]);
-        recordOpponent(t1[0], t2[1]);
-        recordOpponent(t1[1], t2[0]);
-        recordOpponent(t1[1], t2[1]);
-
-        matchesInThisBatch.push({
-            ...createMatch(t1, t2, type),
-            sequence: currentMatchCount + 1,
-            round: roundNumber,
-            court: c + 1
-        });
-        
-        currentMatchCount++;
-    }
-
-    if (matchesInThisBatch.length === 0) break; // Should not happen unless pool < 4
-
-    // --- UPDATE STATS (Batch Level) ---
-    statsMap.forEach(stat => {
-        if (playersInThisBatch.has(stat.player.id)) {
-            // Selected
-            stat.played++;
-
-            stat.consecutivePlays++;
-            stat.consecutiveRests = 0;
-            if (stat.forcedPlaysRemaining > 0) {
-                stat.forcedPlaysRemaining--;
-            }
-        } else {
-            // Resting
-            stat.consecutivePlays = 0;
-            stat.consecutiveRests++;
-            if (stat.consecutiveRests === 2) {
-                stat.consecutiveRestTwiceCount++;
-                stat.forcedPlaysRemaining = 2; // 被連休二次的選手，下一場要讓他連續上場二次
-            }
-        }
-    });
-
-    // --- CAPTURE WAITING STATE (Batch Level) ---
-    const waitingForThisBatch: WaitingPlayerInfo[] = [];
-    statsMap.forEach(stat => {
-        if (!playersInThisBatch.has(stat.player.id)) {
-            waitingForThisBatch.push({
-                player: stat.player,
-                restCount: stat.consecutiveRests
-            });
-        }
-    });
-    waitingForThisBatch.sort((a, b) => b.restCount - a.restCount);
-
-    // Assign waiting list to all matches in this batch
-    matchesInThisBatch.forEach(m => {
-        m.waiting = waitingForThisBatch;
-        schedule.push(m);
-    });
-    
-    roundNumber++;
+      schedule.push(...result.matches);
+      currentMatchCount += result.matches.length;
+      roundNumber++;
   }
 
   return { schedule, error: null };
+};
+
+export const suggestWaitList = (
+  allPlayers: Player[],
+  matchHistory: ScheduleItem[],
+  activeMatches: ScheduleItem[],
+  type: MatchType
+): WaitingPlayerInfo[] => {
+  const statsMap = new Map<string, PlayerStats>();
+  
+  // Minimal stats build just for waitlist display
+  let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
+  if (type === MatchType.MENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.MALE);
+  if (type === MatchType.WOMENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.FEMALE);
+
+  pool.forEach(p => {
+    statsMap.set(p.id, { 
+      player: p, 
+      played: 0, 
+      virtualPlayed: 0,
+      consecutivePlays: 0, 
+      consecutiveRests: 0,
+      consecutiveRestTwiceCount: 0,
+      forcedPlaysRemaining: 0,
+      lastPlayedIndex: -1
+    });
+  });
+
+  const allPastMatches = [...matchHistory, ...activeMatches.filter((m): m is ScheduleItem => m !== null)];
+  const courtCount = activeMatches.length || 1;
+
+  for (let i = 0; i < allPastMatches.length; i += courtCount) {
+      const batchMatches = allPastMatches.slice(i, i + courtCount);
+      const playersInBatch = new Set<string>();
+      const batchTime = batchMatches[0]?.timestamp || 0;
+
+      batchMatches.forEach(match => {
+          playersInBatch.add(match.teamA.player1.id);
+          playersInBatch.add(match.teamA.player2.id);
+          playersInBatch.add(match.teamB.player1.id);
+          playersInBatch.add(match.teamB.player2.id);
+      });
+
+      let activePoolSize = 0;
+      statsMap.forEach(stat => {
+          const isPresent = !stat.player.createdAt || stat.player.createdAt <= batchTime;
+          if (isPresent) activePoolSize++;
+      });
+      const playProb = activePoolSize > 0 ? (batchMatches.length * 4) / activePoolSize : 0;
+
+      statsMap.forEach(stat => {
+          const isPresent = !stat.player.createdAt || stat.player.createdAt <= batchTime;
+          if (playersInBatch.has(stat.player.id)) {
+              stat.played++;
+              stat.consecutivePlays++;
+              stat.consecutiveRests = 0;
+              if (stat.forcedPlaysRemaining > 0) stat.forcedPlaysRemaining--;
+          } else if (isPresent) {
+              stat.consecutivePlays = 0;
+              stat.consecutiveRests++;
+              if (stat.consecutiveRests === 2) {
+                  stat.consecutiveRestTwiceCount++;
+                  stat.forcedPlaysRemaining = 2;
+              }
+          } else {
+              stat.virtualPlayed += playProb;
+          }
+      });
+  }
+
+  const activePlayerIds = new Set<string>();
+  activeMatches.forEach(m => {
+    if (m) {
+      activePlayerIds.add(m.teamA.player1.id);
+      activePlayerIds.add(m.teamA.player2.id);
+      activePlayerIds.add(m.teamB.player1.id);
+      activePlayerIds.add(m.teamB.player2.id);
+    }
+  });
+
+  const waitingStats = Array.from(statsMap.values()).filter(s => !activePlayerIds.has(s.player.id));
+  
+  const getScore = (s: PlayerStats): number => {
+      const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
+      if (s.forcedPlaysRemaining > 0) return -100000000 + effectivePlayed;
+      let score = effectivePlayed * 10000000;
+      if (s.consecutiveRests >= 2) score -= 5000000;
+      else if (s.consecutiveRests === 1) score -= 2000000;
+      else if (s.consecutivePlays >= 2) score += 8000000;
+      else if (s.consecutivePlays === 1) score += 2000000;
+      score -= (s.consecutiveRestTwiceCount || 0) * 50000;
+      return score; 
+  };
+
+  waitingStats.sort((a, b) => getScore(a) - getScore(b));
+
+  return waitingStats.map(s => ({
+    player: s.player,
+    restCount: s.consecutiveRests
+  }));
 };

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ListOrdered, Shuffle, Calendar, CheckCircle2, Circle, Shield, Link2, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'motion/react';
-import { MatchType } from '../types';
+import { MatchType, ScheduleItem } from '../types';
 import { useStore } from '../store/useStore';
-import { generateSchedule, generateNextMatch } from '../services/matchService';
+import { generateSchedule, generateNextMatch, generateNextMatchesGroup } from '../services/matchService';
 
 const ControlToggle = ({ active, onClick, icon: Icon, label, title, colorClass }: any) => (
   <motion.button 
@@ -67,20 +67,21 @@ const ScheduleControls: React.FC = () => {
     setScheduleType(type);
 
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
-    const initialMatches: (ScheduleItem | null)[] = Array(courtCount).fill(null);
     
-    let currentHistory: ScheduleItem[] = [];
-    let currentActive: ScheduleItem[] = [];
-    
-    for (let i = 0; i < courtCount; i++) {
-        const result = generateNextMatch(
-            players, currentHistory, currentActive, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, i + 1, validFirstMatchIds, skillMode
-        );
-        if (result.match) {
-            initialMatches[i] = result.match;
-            currentActive.push(result.match);
-        }
+    const result = generateNextMatchesGroup(
+        players, [], [], mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, courtCount, 1, validFirstMatchIds, skillMode, 1
+    );
+
+    if (result.error) {
+        setErrorMsg(result.error);
+        setTimeout(() => setErrorMsg(null), 3000);
+        return;
     }
+
+    const initialMatches: (ScheduleItem | null)[] = Array(courtCount).fill(null);
+    result.matches.forEach((m, i) => {
+        if (i < courtCount) initialMatches[i] = m;
+    });
     
     if (initialMatches.every(m => m === null)) {
         setErrorMsg('無法產生任何賽程，請檢查人數或設定');

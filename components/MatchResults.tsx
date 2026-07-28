@@ -5,7 +5,7 @@ import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
 import PlayerCard from './PlayerCard';
 import html2canvas from 'html2canvas';
-import { generateNextMatch } from '../services/matchService';
+import { generateNextMatch, suggestWaitList } from '../services/matchService';
 
 const CourtPlayerBadge = ({ player, onClick }: { player: Player; onClick?: () => void }) => (
   <motion.div 
@@ -74,22 +74,8 @@ const MatchResults: React.FC = () => {
     if (isFullScheduleMode) return [];
     if (!activeMatches || activeMatches.length === 0) return [];
     
-    const playingIds = new Set<string>();
-    activeMatches.forEach(match => {
-      if (match) {
-        playingIds.add(match.teamA.player1.id);
-        playingIds.add(match.teamA.player2.id);
-        playingIds.add(match.teamB.player1.id);
-        playingIds.add(match.teamB.player2.id);
-      }
-    });
-
-    return players.filter(p => {
-      if (scheduleType === MatchType.MENS_DOUBLES && p.gender !== Gender.MALE) return false;
-      if (scheduleType === MatchType.WOMENS_DOUBLES && p.gender !== Gender.FEMALE) return false;
-      return !playingIds.has(p.id);
-    });
-  }, [players, activeMatches, scheduleType]);
+    return suggestWaitList(players, matchHistory, activeMatches, scheduleType);
+  }, [players, matchHistory, activeMatches, scheduleType]);
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
@@ -243,7 +229,7 @@ const MatchResults: React.FC = () => {
       ]);
       benchPlayers = players.filter(p => !playingIds.has(p.id));
     } else {
-      benchPlayers = waitingPlayers;
+      benchPlayers = waitingPlayers.map(wp => wp.player);
     }
 
     if (scheduleType === MatchType.MENS_DOUBLES) benchPlayers = benchPlayers.filter(p => p.gender === Gender.MALE);
@@ -567,8 +553,9 @@ const MatchResults: React.FC = () => {
                         <div className="flex flex-wrap gap-2">
                           {waitingPlayers.map(p => (
                             <PlayerCard 
-                              key={p.id} 
-                              player={p} 
+                              key={p.player.id} 
+                              player={p.player} 
+                              restCount={p.restCount}
                               onStatusToggle={togglePlayerStatus}
                             />
                           ))}
@@ -805,8 +792,9 @@ const MatchResults: React.FC = () => {
                 <div className="flex flex-wrap gap-4">
                   {waitingPlayers.map(p => (
                     <PlayerCard 
-                      key={p.id} 
-                      player={p} 
+                      key={p.player.id} 
+                      player={p.player} 
+                      restCount={p.restCount}
                       onStatusToggle={togglePlayerStatus}
                       size="lg"
                       className="border-slate-700 bg-slate-800 text-slate-200"

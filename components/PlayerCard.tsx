@@ -13,6 +13,7 @@ interface PlayerCardProps {
   onLevelChange?: (id: string, level: number) => void;
   onStatusToggle?: (id: string) => void;
   onClick?: (player: Player) => void;
+  restCount?: number;
 }
 
 const PlayerCard: React.FC<PlayerCardProps> = ({ 
@@ -24,7 +25,8 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
   showLevelAdjust = false,
   onLevelChange,
   onStatusToggle,
-  onClick
+  onClick,
+  restCount
 }) => {
   const isMale = player.gender === Gender.MALE;
   const isSuspended = player.status === 'SUSPENDED';
@@ -69,6 +71,12 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
       <span className={`font-bold tracking-wide ${autoWidth ? '' : 'truncate max-w-[100px]'} ${isSuspended ? 'line-through opacity-70' : ''}`}>
         {player.name}
       </span>
+      
+      {restCount !== undefined && restCount > 0 && (
+        <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 rounded-full text-xs font-black -ml-1">
+          {restCount}
+        </span>
+      )}
       
       {showLevelAdjust && (
         <div className="flex items-center ml-1 bg-white/80 dark:bg-slate-800/80 rounded-full shadow-inner border border-slate-200/50 dark:border-slate-700/50 overflow-hidden">

@@ -7,18 +7,18 @@ import ImportModal from './ImportModal';
 import { ShareGroupModal } from './ShareGroupModal';
 import { useStore } from '../store/useStore';
 
-const PlayerListItem = ({ 
-  player, 
-  enableSkillLevel, 
-  onUpdateLevel, 
-  onToggleStatus, 
-  onRemove 
-}: { 
+const PlayerListItem: React.FC<{ 
   player: Player, 
   enableSkillLevel: boolean, 
   onUpdateLevel: (id: string, level: number) => void, 
   onToggleStatus: (id: string) => void, 
   onRemove: (id: string) => void 
+}> = ({ 
+  player, 
+  enableSkillLevel, 
+  onUpdateLevel, 
+  onToggleStatus, 
+  onRemove 
 }) => {
   const isMale = player.gender === Gender.MALE;
   const isSuspended = player.status === 'SUSPENDED';
