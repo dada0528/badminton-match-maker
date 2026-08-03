@@ -38,6 +38,8 @@ interface AppState {
   
   // UI State
   errorMsg: string | null;
+  isFullscreen: boolean;
+  setIsFullscreen: (isFullscreen: boolean) => void;
 
   // Payment State
   paymentInfo: PaymentInfo;
@@ -298,6 +300,8 @@ export const useStore = create<AppState>()(
       },
 
       setErrorMsg: (errorMsg) => set({ errorMsg }),
+      isFullscreen: false,
+      setIsFullscreen: (isFullscreen) => set({ isFullscreen }),
 
       setPaymentInfo: (paymentInfo) => set({ paymentInfo }),
       togglePlayerPaid: (playerId) => set((state) => ({

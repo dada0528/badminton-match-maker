@@ -72,15 +72,19 @@ export const generateNextMatchesGroup = (
   const statsMap = new Map<string, PlayerStats>();
   const partnerHistory = new Map<string, number>(); 
   const opponentHistory = new Map<string, number>();
+  const rawPartnerCount = new Map<string, number>();
+  const rawOpponentCount = new Map<string, number>();
 
   const recordPartnership = (id1: string, id2: string, weight: number = 1) => {
     const key = getPartnerKey(id1, id2);
     partnerHistory.set(key, (partnerHistory.get(key) || 0) + weight);
+    rawPartnerCount.set(key, (rawPartnerCount.get(key) || 0) + 1);
   };
   
   const recordOpponent = (id1: string, id2: string, weight: number = 1) => {
     const key = getPartnerKey(id1, id2);
     opponentHistory.set(key, (opponentHistory.get(key) || 0) + weight);
+    rawOpponentCount.set(key, (rawOpponentCount.get(key) || 0) + 1);
   };
 
   pool.forEach(p => {
@@ -208,19 +212,20 @@ export const generateNextMatchesGroup = (
       return Math.random() - 0.5;
   });
 
-  // Re-roll candidates: Add extra players for outlier optimization
-  const extraCandidates = 4;
-  
+  // Dynamic candidate selection: expand pool to allow pairing players with unplayed history
   let candidateStats: PlayerStats[] = [];
   if (type === MatchType.MIXED_DOUBLES) {
       const mStats = availableStats.filter(s => s.player.gender === Gender.MALE);
       const fStats = availableStats.filter(s => s.player.gender === Gender.FEMALE);
+      const mCutoff = Math.max(targetCourts * 2 + 6, Math.min(mStats.length, 16));
+      const fCutoff = Math.max(targetCourts * 2 + 6, Math.min(fStats.length, 16));
       candidateStats = [
-          ...mStats.slice(0, targetCourts * 2 + extraCandidates),
-          ...fStats.slice(0, targetCourts * 2 + extraCandidates)
+          ...mStats.slice(0, mCutoff),
+          ...fStats.slice(0, fCutoff)
       ];
   } else {
-      candidateStats = availableStats.slice(0, targetCourts * 4 + extraCandidates);
+      const cutoff = Math.max(targetCourts * 4 + 10, Math.min(availableStats.length, 24));
+      candidateStats = availableStats.slice(0, cutoff);
   }
 
   // Handle first match explicit forcing
@@ -254,20 +259,57 @@ export const generateNextMatchesGroup = (
       
       const pA = getPartnerKey(t1[0].player, t1[1].player);
       const pB = getPartnerKey(t2[0].player, t2[1].player);
-      penalty += (partnerHistory.get(pA) || 0) * 10000;
-      penalty += (partnerHistory.get(pB) || 0) * 10000;
       
-      if (!mixPartners) {
-          penalty -= (partnerHistory.get(pA) || 0) * 10000;
-          penalty -= (partnerHistory.get(pB) || 0) * 10000;
+      const rawPartnersA = rawPartnerCount.get(pA) || 0;
+      const rawPartnersB = rawPartnerCount.get(pB) || 0;
+
+      // Partner repetition & unplayed bonus
+      if (mixPartners) {
+          penalty += (partnerHistory.get(pA) || 0) * 10000;
+          penalty += (partnerHistory.get(pB) || 0) * 10000;
+          penalty += rawPartnersA * 15000;
+          penalty += rawPartnersB * 15000;
+
+          if (rawPartnersA === 0) penalty -= 12000;
+          if (rawPartnersB === 0) penalty -= 12000;
       }
 
+      // Opponent repetition & unplayed bonus
       const o1 = getPartnerKey(t1[0].player, t2[0].player);
       const o2 = getPartnerKey(t1[0].player, t2[1].player);
       const o3 = getPartnerKey(t1[1].player, t2[0].player);
       const o4 = getPartnerKey(t1[1].player, t2[1].player);
-      penalty += ((opponentHistory.get(o1) || 0) + (opponentHistory.get(o2) || 0) + 
-                  (opponentHistory.get(o3) || 0) + (opponentHistory.get(o4) || 0)) * 2000;
+      
+      const oppKeys = [o1, o2, o3, o4];
+      oppKeys.forEach(opKey => {
+          const wOpp = opponentHistory.get(opKey) || 0;
+          const rOpp = rawOpponentCount.get(opKey) || 0;
+          penalty += wOpp * 4000;
+          penalty += rOpp * 6000;
+          if (mixPartners && rOpp === 0) {
+              penalty -= 6000;
+          }
+      });
+
+      // Overall lifetime court sharing bonus / penalty across all 6 pairs
+      const allFour = [t1[0].player, t1[1].player, t2[0].player, t2[1].player];
+      for (let i = 0; i < allFour.length; i++) {
+          for (let j = i + 1; j < allFour.length; j++) {
+              const pairKey = getPartnerKey(allFour[i], allFour[j]);
+              const rPartner = rawPartnerCount.get(pairKey) || 0;
+              const rOpponent = rawOpponentCount.get(pairKey) || 0;
+              const totalEncounters = rPartner + rOpponent;
+
+              if (mixPartners) {
+                  if (totalEncounters === 0) {
+                      // Massive bonus for players who have NEVER shared a court lifetime!
+                      penalty -= 25000;
+                  } else if (totalEncounters >= 2) {
+                      penalty += (totalEncounters - 1) * 10000;
+                  }
+              }
+          }
+      }
 
       fixedPairs.forEach(([id1, id2]) => {
           const inT1 = t1.some(p => p.player.id === id1) && t1.some(p => p.player.id === id2);
@@ -329,9 +371,6 @@ export const generateNextMatchesGroup = (
      const matches: Array<{t1: PlayerStats[], t2: PlayerStats[]}> = [];
 
      for(const s of selected) cost += scoreCache.get(s.player.id)!;
-
-     // Stop early if priority cost alone is already worse than bestCost (huge optimization)
-     if (cost > bestCost) continue;
 
      // Partition into courts
      if (type === MatchType.MIXED_DOUBLES) {

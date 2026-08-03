@@ -43,7 +43,9 @@ const MatchResults: React.FC = () => {
     courtNames,
     autoVoiceEnabled,
     setAutoVoiceEnabled,
-    togglePlayerStatus
+    togglePlayerStatus,
+    isFullscreen,
+    setIsFullscreen
   } = useStore();
 
   const isFullScheduleMode = fullSchedule && fullSchedule.length > 0;
@@ -51,7 +53,6 @@ const MatchResults: React.FC = () => {
   const displayMatches = isFullScheduleMode ? fullSchedule : activeMatches;
 
   const scheduleRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
   const [swappingPlayer, setSwappingPlayer] = useState<{
     matchIdx: number;
@@ -642,7 +643,7 @@ const MatchResults: React.FC = () => {
            initial={{ opacity: 0 }}
            animate={{ opacity: 1 }}
            exit={{ opacity: 0 }}
-           className="fixed inset-0 z-50 bg-slate-900 flex flex-col h-screen overflow-hidden overscroll-none"
+           className="fixed inset-0 z-[100] bg-slate-900 flex flex-col h-screen overflow-hidden overscroll-none"
         >
           {/* Fullscreen Header */}
           <div className="bg-slate-900 border-b border-slate-800 p-4 sm:px-8 flex items-center justify-between shrink-0">

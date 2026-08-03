@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X, Search, Filter, UserCheck, UserX, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, Gender } from '../types';
 import PlayerCard from './PlayerCard';
@@ -83,6 +83,58 @@ const PlayerInputSection: React.FC = () => {
   const [newGender, setNewGender] = useState<Gender>(Gender.MALE);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [genderFilter, setGenderFilter] = useState<'ALL' | 'MALE' | 'FEMALE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
+
+  const filteredPlayers = useMemo(() => {
+    return players.filter(p => {
+      const pStatus = p.status || 'ACTIVE';
+      if (searchQuery.trim() && !p.name.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
+        return false;
+      }
+      if (genderFilter === 'MALE' && p.gender !== Gender.MALE) return false;
+      if (genderFilter === 'FEMALE' && p.gender !== Gender.FEMALE) return false;
+      if (statusFilter === 'ACTIVE' && pStatus !== 'ACTIVE') return false;
+      if (statusFilter === 'SUSPENDED' && pStatus !== 'SUSPENDED') return false;
+      return true;
+    });
+  }, [players, searchQuery, genderFilter, statusFilter]);
+
+  const maleFiltered = useMemo(() => filteredPlayers.filter(p => p.gender === Gender.MALE), [filteredPlayers]);
+  const femaleFiltered = useMemo(() => filteredPlayers.filter(p => p.gender === Gender.FEMALE), [filteredPlayers]);
+
+  const activeCount = useMemo(() => players.filter(p => (p.status || 'ACTIVE') === 'ACTIVE').length, [players]);
+  const suspendedCount = useMemo(() => players.filter(p => p.status === 'SUSPENDED').length, [players]);
+  const maleTotal = useMemo(() => players.filter(p => p.gender === Gender.MALE).length, [players]);
+  const femaleTotal = useMemo(() => players.filter(p => p.gender === Gender.FEMALE).length, [players]);
+
+  const isFiltering = searchQuery.trim().length > 0 || genderFilter !== 'ALL' || statusFilter !== 'ALL';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setGenderFilter('ALL');
+    setStatusFilter('ALL');
+  };
+
+  const handleBatchStatus = (targetStatus: 'ACTIVE' | 'SUSPENDED') => {
+    if (filteredPlayers.length === 0) return;
+    const targetIds = new Set(filteredPlayers.map(p => p.id));
+    setPlayers(prev => prev.map(p => {
+      if (targetIds.has(p.id)) {
+        return {
+          ...p,
+          status: targetStatus,
+          ...(targetStatus === 'ACTIVE' ? { createdAt: Date.now() } : {})
+        };
+      }
+      return p;
+    }));
+    setErrorMsg(`已將符合條件的 ${targetIds.size} 位球員切換為${targetStatus === 'ACTIVE' ? '上場' : '休息/請假'}`);
+    setTimeout(() => setErrorMsg(null), 2000);
+  };
 
   const handleAddPlayer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -290,12 +342,21 @@ const PlayerInputSection: React.FC = () => {
         </div>
       )}
 
-      {/* Active Player Grid */}
+      {/* Active Player Grid & Filters */}
       <div className="min-h-[120px] relative z-10 mt-6">
-        <div className="flex items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-700/50 pb-4">
-          <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 tracking-wider">上場名單</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-100 dark:border-slate-700/50 pb-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 tracking-wider flex items-center gap-2">
+              上場名單
+            </h3>
+            {players.length > 0 && (
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-full">
+                出席 {activeCount} · 請假 {suspendedCount}
+              </span>
+            )}
+          </div>
           
-          <label className="flex items-center gap-2 cursor-pointer group bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+          <label className="flex items-center gap-2 cursor-pointer group bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 self-start sm:self-auto">
             <span className="text-xs font-bold text-slate-600 group-hover:text-slate-800 dark:text-slate-400 dark:group-hover:text-slate-200 transition-colors flex items-center gap-1.5">
               <Activity size={14} className={enableSkillLevel ? 'text-emerald-500' : ''} />
               戰力分級
@@ -311,6 +372,123 @@ const PlayerInputSection: React.FC = () => {
             </div>
           </label>
         </div>
+
+        {/* Search, Filter Bar & Batch Controls */}
+        {players.length > 0 && (
+          <div className="space-y-3 mb-6 bg-slate-50/70 dark:bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+            <div className="flex flex-col sm:flex-row gap-2.5 items-center">
+              {/* Search input */}
+              <div className="relative w-full flex-1">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="快速搜尋球員名字..."
+                  className="w-full pl-10 pr-9 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 shadow-sm"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Batch buttons */}
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleBatchStatus('SUSPENDED')}
+                  title="將目前顯示的球員設為休息/請假"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs font-bold transition-all shadow-sm"
+                >
+                  <Pause size={13} strokeWidth={2.5} />
+                  一鍵全休
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleBatchStatus('ACTIVE')}
+                  title="將目前顯示的球員設為出席/上場"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 rounded-xl text-xs font-bold transition-all shadow-sm"
+                >
+                  <Play size={13} strokeWidth={2.5} />
+                  一鍵全上
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Quick Filter Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+              <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar py-0.5 max-w-full">
+                <button
+                  onClick={() => setGenderFilter('ALL')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                    genderFilter === 'ALL'
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  全部 ({players.length})
+                </button>
+                <button
+                  onClick={() => setGenderFilter('MALE')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1 ${
+                    genderFilter === 'MALE'
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  👦 男 ({maleTotal})
+                </button>
+                <button
+                  onClick={() => setGenderFilter('FEMALE')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1 ${
+                    genderFilter === 'FEMALE'
+                      ? 'bg-pink-500 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  👧 女 ({femaleTotal})
+                </button>
+
+                <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1 shrink-0"></div>
+
+                <button
+                  onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                    statusFilter === 'ACTIVE'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  🟢 出席 ({activeCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter(statusFilter === 'SUSPENDED' ? 'ALL' : 'SUSPENDED')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                    statusFilter === 'SUSPENDED'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  🔴 請假 ({suspendedCount})
+                </button>
+              </div>
+
+              {isFiltering && (
+                <button
+                  onClick={resetFilters}
+                  className="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-bold flex items-center gap-1 ml-auto shrink-0"
+                >
+                  <RotateCcw size={12} /> 重置篩選 ({filteredPlayers.length}/{players.length})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         
         {players.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
@@ -318,75 +496,90 @@ const PlayerInputSection: React.FC = () => {
             <p className="font-bold text-slate-500 dark:text-slate-400">目前沒有球員</p>
             <p className="text-sm mt-1 opacity-70">請在上方輸入姓名加入清單</p>
           </div>
+        ) : filteredPlayers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/20">
+            <Search size={32} className="mb-2 opacity-40" />
+            <p className="font-bold text-slate-600 dark:text-slate-300 text-sm">找不到符合篩選條件的球員</p>
+            <button
+              onClick={resetFilters}
+              className="mt-3 px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all shadow-sm"
+            >
+              清除搜尋條件
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
             {/* Male Players */}
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <span className="font-bold">👦</span>
+            {(genderFilter === 'ALL' || genderFilter === 'MALE') && (
+              <div>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <span className="font-bold">👦</span>
+                    </div>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">男生</span>
                   </div>
-                  <span className="font-bold text-slate-700 dark:text-slate-200">男生</span>
+                  <span className="text-xs font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full">
+                    {maleFiltered.length} 人
+                  </span>
                 </div>
-                <span className="text-xs font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full">
-                  {players.filter(p => p.gender === Gender.MALE).length} 人
-                </span>
+                <div className="space-y-2">
+                  <AnimatePresence>
+                    {maleFiltered.map(player => (
+                      <PlayerListItem 
+                        key={player.id} 
+                        player={player} 
+                        enableSkillLevel={enableSkillLevel}
+                        onUpdateLevel={updatePlayerLevel}
+                        onToggleStatus={togglePlayerStatus}
+                        onRemove={removePlayer}
+                      />
+                    ))}
+                    {maleFiltered.length === 0 && (
+                      <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                        無男生球員
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-              <div className="space-y-2">
-                <AnimatePresence>
-                  {players.filter(p => p.gender === Gender.MALE).map(player => (
-                    <PlayerListItem 
-                      key={player.id} 
-                      player={player} 
-                      enableSkillLevel={enableSkillLevel}
-                      onUpdateLevel={updatePlayerLevel}
-                      onToggleStatus={togglePlayerStatus}
-                      onRemove={removePlayer}
-                    />
-                  ))}
-                  {players.filter(p => p.gender === Gender.MALE).length === 0 && (
-                     <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
-                       無男生球員
-                     </div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
+            )}
 
             {/* Female Players */}
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/50 flex items-center justify-center text-pink-600 dark:text-pink-400">
-                    <span className="font-bold">👧</span>
+            {(genderFilter === 'ALL' || genderFilter === 'FEMALE') && (
+              <div>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/50 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                      <span className="font-bold">👧</span>
+                    </div>
+                    <span className="font-bold text-slate-700 dark:text-slate-200">女生</span>
                   </div>
-                  <span className="font-bold text-slate-700 dark:text-slate-200">女生</span>
+                  <span className="text-xs font-bold bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2.5 py-1 rounded-full">
+                    {femaleFiltered.length} 人
+                  </span>
                 </div>
-                <span className="text-xs font-bold bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2.5 py-1 rounded-full">
-                  {players.filter(p => p.gender === Gender.FEMALE).length} 人
-                </span>
+                <div className="space-y-2">
+                  <AnimatePresence>
+                    {femaleFiltered.map(player => (
+                      <PlayerListItem 
+                        key={player.id} 
+                        player={player} 
+                        enableSkillLevel={enableSkillLevel}
+                        onUpdateLevel={updatePlayerLevel}
+                        onToggleStatus={togglePlayerStatus}
+                        onRemove={removePlayer}
+                      />
+                    ))}
+                    {femaleFiltered.length === 0 && (
+                      <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                        無女生球員
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-              <div className="space-y-2">
-                <AnimatePresence>
-                  {players.filter(p => p.gender === Gender.FEMALE).map(player => (
-                    <PlayerListItem 
-                      key={player.id} 
-                      player={player} 
-                      enableSkillLevel={enableSkillLevel}
-                      onUpdateLevel={updatePlayerLevel}
-                      onToggleStatus={togglePlayerStatus}
-                      onRemove={removePlayer}
-                    />
-                  ))}
-                  {players.filter(p => p.gender === Gender.FEMALE).length === 0 && (
-                     <div className="text-center py-6 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
-                       無女生球員
-                     </div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
