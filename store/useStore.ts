@@ -151,9 +151,31 @@ export const useStore = create<AppState>()(
         addToHistory(trimmedName, gender);
       },
       
-      updatePlayerLevel: (id: string, level: number) => set((state) => ({
-        players: state.players.map(p => p.id === id ? { ...p, level: Math.max(1, Math.min(9, level)) } : p)
-      })),
+      updatePlayerLevel: (id: string, level: number) => set((state) => {
+        const newLevel = Math.max(1, Math.min(9, level));
+        const updatePlayerObj = <T extends Player>(p: T): T => {
+          return p.id === id ? { ...p, level: newLevel } : p;
+        };
+        const updateTeam = (team: { player1: Player; player2: Player }) => ({
+          player1: updatePlayerObj(team.player1),
+          player2: updatePlayerObj(team.player2),
+        });
+        const updateScheduleItem = (item: ScheduleItem | null): ScheduleItem | null => {
+          if (!item) return null;
+          return {
+            ...item,
+            teamA: updateTeam(item.teamA),
+            teamB: updateTeam(item.teamB),
+            waiting: item.waiting?.map((w) => ({ ...w, player: updatePlayerObj(w.player) })),
+          };
+        };
+
+        return {
+          players: state.players.map((p) => (p.id === id ? { ...p, level: newLevel } : p)),
+          activeMatches: state.activeMatches.map(updateScheduleItem),
+          fullSchedule: state.fullSchedule.map((m) => updateScheduleItem(m) as ScheduleItem),
+        };
+      }),
 
       togglePlayerStatus: (id: string) => set((state) => ({
         players: state.players.map(p => {

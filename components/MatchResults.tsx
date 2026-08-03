@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate } from 'lucide-react';
+import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
@@ -12,7 +12,7 @@ const CourtPlayerBadge = ({ player, onClick }: { player: Player; onClick?: () =>
     whileHover={onClick ? { scale: 1.05 } : {}}
     whileTap={onClick ? { scale: 0.95 } : {}}
     onClick={onClick}
-    className={`flex items-center justify-center w-14 sm:w-20 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black shadow-xl border-2 overflow-hidden backdrop-blur-md ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-emerald-300 transition-all' : ''} ${
+    className={`flex items-center justify-center min-w-[3.8rem] px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black shadow-xl border-2 overflow-hidden backdrop-blur-md ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-emerald-300 transition-all' : ''} ${
     player.gender === Gender.MALE 
       ? 'bg-blue-500/90 border-blue-200/50 text-white dark:bg-blue-600/90' 
       : 'bg-pink-500/90 border-pink-200/50 text-white dark:bg-pink-600/90'
@@ -44,6 +44,7 @@ const MatchResults: React.FC = () => {
     autoVoiceEnabled,
     setAutoVoiceEnabled,
     togglePlayerStatus,
+    updatePlayerLevel,
     isFullscreen,
     setIsFullscreen
   } = useStore();
@@ -270,7 +271,7 @@ const MatchResults: React.FC = () => {
                  <button
                     onClick={() => {
                         togglePlayerStatus(player.id);
-                        setSwappingPlayer(null); // Optional: close modal on toggle, or keep open. Let's close it so the UI explicitly shows they clicked it.
+                        setSwappingPlayer(null);
                     }}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors active:scale-95 shrink-0 ${
                         isSuspended 
@@ -280,6 +281,35 @@ const MatchResults: React.FC = () => {
                  >
                     {isSuspended ? '恢復正常輪替' : '設為臨時下場'}
                  </button>
+              </div>
+
+              {/* Skill Level Adjustment Row */}
+              <div className="px-6 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                 <div>
+                    <span className="font-bold text-slate-700 dark:text-slate-200 block text-sm">等級 (Level) 調整</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">即時微調實力，自動同步後續對陣與排點</p>
+                 </div>
+                 <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/80 rounded-xl p-1 border border-slate-200 dark:border-slate-600 shrink-0">
+                   <button
+                     onClick={() => updatePlayerLevel(storePlayer.id, (storePlayer.level || 3) - 1)}
+                     disabled={(storePlayer.level || 3) <= 1}
+                     className="p-1.5 hover:bg-white dark:hover:bg-slate-600 rounded-lg text-slate-700 dark:text-slate-200 disabled:opacity-30 transition-colors active:scale-95"
+                     title="降低等級"
+                   >
+                     <Minus size={14} strokeWidth={3} />
+                   </button>
+                   <span className="font-black text-slate-800 dark:text-slate-100 min-w-[3ch] text-center text-sm">
+                     Lv.{storePlayer.level || 3}
+                   </span>
+                   <button
+                     onClick={() => updatePlayerLevel(storePlayer.id, (storePlayer.level || 3) + 1)}
+                     disabled={(storePlayer.level || 3) >= 9}
+                     className="p-1.5 hover:bg-white dark:hover:bg-slate-600 rounded-lg text-slate-700 dark:text-slate-200 disabled:opacity-30 transition-colors active:scale-95"
+                     title="提高等級"
+                   >
+                     <Plus size={14} strokeWidth={3} />
+                   </button>
+                 </div>
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[50vh] space-y-6">

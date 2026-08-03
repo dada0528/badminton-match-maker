@@ -78,6 +78,11 @@ const ScheduleControls: React.FC = () => {
         return;
     }
 
+    if (result.notice) {
+        setErrorMsg(result.notice);
+        setTimeout(() => setErrorMsg(null), 5000);
+    }
+
     const initialMatches: (ScheduleItem | null)[] = Array(courtCount).fill(null);
     result.matches.forEach((m, i) => {
         if (i < courtCount) initialMatches[i] = m;
@@ -106,6 +111,10 @@ const ScheduleControls: React.FC = () => {
         setErrorMsg(result.error);
         setTimeout(() => setErrorMsg(null), 3000);
     } else {
+        if (result.notice) {
+            setErrorMsg(result.notice);
+            setTimeout(() => setErrorMsg(null), 5000);
+        }
         useStore.getState().setFullSchedule(result.schedule);
         scrollToResults();
     }
