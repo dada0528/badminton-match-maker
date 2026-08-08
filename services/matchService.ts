@@ -103,16 +103,41 @@ export const generateNextMatchesGroup = (
   });
 
   const allPastMatches = [...matchHistory, ...activeMatches.filter((m): m is ScheduleItem => m !== null)];
-  const courtCount = activeMatches.length || 1;
-  const totalBatches = Math.ceil(allPastMatches.length / courtCount);
+  
+  // Group matches into rounds based on player overlap to accurately calculate recency
+  const rounds: ScheduleItem[][] = [];
+  let currentRound: ScheduleItem[] = [];
+  let currentRoundPlayers = new Set<string>();
 
-  // Recency Decay Calculation:
-  // distance = 1: immediate previous round (highest penalty)
-  // distance = 2: 2 rounds ago
-  // distance >= 5: smooth exponential decay so historical matches don't lock future pairings
-  for (let i = 0; i < allPastMatches.length; i += courtCount) {
-      const batchIndex = Math.floor(i / courtCount);
-      const distance = totalBatches - batchIndex;
+  for (const match of allPastMatches) {
+      const p1 = match.teamA.player1.id;
+      const p2 = match.teamA.player2.id;
+      const p3 = match.teamB.player1.id;
+      const p4 = match.teamB.player2.id;
+
+      if (currentRoundPlayers.has(p1) || currentRoundPlayers.has(p2) || currentRoundPlayers.has(p3) || currentRoundPlayers.has(p4)) {
+          // Conflict found, push current round and start a new one
+          rounds.push(currentRound);
+          currentRound = [match];
+          currentRoundPlayers = new Set([p1, p2, p3, p4]);
+      } else {
+          currentRound.push(match);
+          currentRoundPlayers.add(p1);
+          currentRoundPlayers.add(p2);
+          currentRoundPlayers.add(p3);
+          currentRoundPlayers.add(p4);
+      }
+  }
+  if (currentRound.length > 0) {
+      rounds.push(currentRound);
+  }
+
+  const totalRounds = rounds.length;
+
+  // Recency Decay Calculation
+  for (let i = 0; i < rounds.length; i++) {
+      const batchMatches = rounds[i];
+      const distance = totalRounds - i;
       
       let weight = 1;
       if (distance === 1) weight = 100;
@@ -121,7 +146,6 @@ export const generateNextMatchesGroup = (
       else if (distance === 4) weight = 2.5;
       else weight = Math.max(0.1, 1 / Math.pow(distance - 3, 1.5));
 
-      const batchMatches = allPastMatches.slice(i, i + courtCount);
       const playersInBatch = new Set<string>();
       
       const batchTime = batchMatches[0]?.timestamp || 0;
@@ -166,7 +190,7 @@ export const generateNextMatchesGroup = (
               stat.consecutiveRests++;
               if (stat.consecutiveRests === 2) {
                   stat.consecutiveRestTwiceCount++;
-                  stat.forcedPlaysRemaining = 2;
+                  stat.forcedPlaysRemaining = 1;
               }
           } else {
               stat.virtualPlayed += playProb;
@@ -197,7 +221,7 @@ export const generateNextMatchesGroup = (
       let score = effectivePlayed * 10000000;
       
       // Rest rewards (prioritize rested players)
-      if (s.consecutiveRests >= 2) score -= 8000000;
+      if (s.consecutiveRests >= 2) score -= 80000000;
       else if (s.consecutiveRests === 1) score -= 3000000;
       
       // Continuous Play / Fatigue Penalties:
@@ -269,19 +293,57 @@ export const generateNextMatchesGroup = (
       courtTypes = Array(targetCourts).fill(type);
   }
 
-  // Dynamic candidate selection: expand pool to allow pairing players with unplayed history
+  // Dynamic candidate selection: expand pool based on strict scoring tiers to enforce equal rotations
   let candidateStats: PlayerStats[] = [];
+  
+  const thresholdBuffer = 2000000; // Allow a 2M variance to group players with same play/rest history
+  
   if (type === MatchType.MIXED_DOUBLES) {
-      const mStats = availableStats.filter(s => s.player.gender === Gender.MALE);
-      const fStats = availableStats.filter(s => s.player.gender === Gender.FEMALE);
-      const mCutoff = Math.max(targetCourts * 2 + 8, Math.min(mStats.length, 20));
-      const fCutoff = Math.max(targetCourts * 2 + 8, Math.min(fStats.length, 20));
-      candidateStats = [
-          ...mStats.slice(0, mCutoff),
-          ...fStats.slice(0, fCutoff)
-      ];
+      const hasRandom = courtTypes.includes(MatchType.RANDOM);
+      if (hasRandom) {
+          const needed = targetCourts * 4;
+          if (availableStats.length <= needed) {
+              candidateStats = availableStats;
+          } else {
+              const thresholdScore = scoreCache.get(availableStats[needed - 1].player.id)!;
+              candidateStats = availableStats.filter(s => scoreCache.get(s.player.id)! <= thresholdScore + thresholdBuffer);
+          }
+      } else {
+          const mStats = availableStats.filter(s => s.player.gender === Gender.MALE);
+          const fStats = availableStats.filter(s => s.player.gender === Gender.FEMALE);
+          
+          const mMixNeeded = courtTypes.filter(c => c === MatchType.MIXED_DOUBLES).length * 2;
+          const mMenNeeded = courtTypes.filter(c => c === MatchType.MENS_DOUBLES).length * 4;
+          const mNeeded = mMixNeeded + mMenNeeded;
+
+          const fMixNeeded = courtTypes.filter(c => c === MatchType.MIXED_DOUBLES).length * 2;
+          const fWomenNeeded = courtTypes.filter(c => c === MatchType.WOMENS_DOUBLES).length * 4;
+          const fNeeded = fMixNeeded + fWomenNeeded;
+          
+          const getTieredCandidates = (stats: PlayerStats[], neededCount: number) => {
+              if (stats.length <= neededCount || neededCount === 0) return stats;
+              const thresholdScore = scoreCache.get(stats[neededCount - 1].player.id)!;
+              return stats.filter(s => scoreCache.get(s.player.id)! <= thresholdScore + thresholdBuffer);
+          };
+          
+          candidateStats = [
+              ...getTieredCandidates(mStats, mNeeded),
+              ...getTieredCandidates(fStats, fNeeded)
+          ];
+      }
   } else {
-      const cutoff = Math.max(targetCourts * 4 + 10, Math.min(availableStats.length, 24));
+      const needed = targetCourts * 4;
+      if (availableStats.length <= needed) {
+          candidateStats = availableStats;
+      } else {
+          const thresholdScore = scoreCache.get(availableStats[needed - 1].player.id)!;
+          candidateStats = availableStats.filter(s => scoreCache.get(s.player.id)! <= thresholdScore + thresholdBuffer);
+      }
+  }
+  
+  // Fallback if not enough candidates due to any unforeseen issue
+  if (candidateStats.length < targetCourts * 4) {
+      const cutoff = Math.min(targetCourts * 4 + 4, availableStats.length);
       candidateStats = availableStats.slice(0, cutoff);
   }
 
@@ -315,28 +377,29 @@ export const generateNextMatchesGroup = (
   const calculateMatchPenalty = (t1: PlayerStats[], t2: PlayerStats[], matchType: MatchType) => {
       let penalty = 0;
       
+      // 1. Partner Repetition & Recency
       const pA = getPartnerKey(t1[0].player, t1[1].player);
       const pB = getPartnerKey(t2[0].player, t2[1].player);
       
-      const recDistA = recentPartnerDistance.get(pA) ?? 999;
-      const recDistB = recentPartnerDistance.get(pB) ?? 999;
+      const partnerKeys = [pA, pB];
+      partnerKeys.forEach(pKey => {
+          const recDist = recentPartnerDistance.get(pKey) ?? 999;
+          const count = rawPartnerCount.get(pKey) || 0;
 
-      // 1. Recency Weighting & Partner Repetition
-      if (mixPartners) {
-          // Immediate back-to-back partner penalty
-          if (recDistA === 1) penalty += 500000;
-          if (recDistB === 1) penalty += 500000;
+          if (mixPartners) {
+              if (count === 0) {
+                  penalty -= 60000; // Strong bonus for never-partnered
+              } else {
+                  if (recDist === 1) penalty += 400000;
+                  else if (recDist === 2) penalty += 80000;
+                  else if (recDist === 3) penalty += 20000;
+                  
+                  penalty += count * 15000; // Lifetime partner penalty
+              }
+          }
+      });
 
-          // Decayed partner weight penalty
-          penalty += (partnerHistory.get(pA) || 0) * 8000;
-          penalty += (partnerHistory.get(pB) || 0) * 8000;
-
-          // Bonus for never-before paired partners
-          if ((rawPartnerCount.get(pA) || 0) === 0) penalty -= 12000;
-          if ((rawPartnerCount.get(pB) || 0) === 0) penalty -= 12000;
-      }
-
-      // 2. Opponent Repetition with Recency Weighting
+      // 2. Opponent Repetition & Recency (Cross-pollination)
       const o1 = getPartnerKey(t1[0].player, t2[0].player);
       const o2 = getPartnerKey(t1[0].player, t2[1].player);
       const o3 = getPartnerKey(t1[1].player, t2[0].player);
@@ -344,45 +407,25 @@ export const generateNextMatchesGroup = (
       
       const oppKeys = [o1, o2, o3, o4];
       oppKeys.forEach(opKey => {
-          const recOppDist = recentOpponentDistance.get(opKey) ?? 999;
-          if (recOppDist === 1) penalty += 120000; // Immediate previous round opponent penalty
+          const recDist = recentOpponentDistance.get(opKey) ?? 999;
+          const count = rawOpponentCount.get(opKey) || 0;
           
-          const wOpp = opponentHistory.get(opKey) || 0;
-          penalty += wOpp * 3000;
-          
-          if (mixPartners && (rawOpponentCount.get(opKey) || 0) === 0) {
-              penalty -= 5000;
+          if (count === 0) {
+              penalty -= 20000; // Bonus for never-played opponents (forces mixing across courts)
+          } else {
+              if (recDist === 1) penalty += 200000;
+              else if (recDist === 2) penalty += 40000;
+              else if (recDist === 3) penalty += 10000;
+              
+              penalty += count * 5000; // Lifetime opponent penalty
           }
       });
 
-      // 3. Lifetime & Recency Court Sharing Across All 4 Players
+      // 3. Consecutive Play / Fatigue Penalty inside Match
       const allFour = [t1[0], t1[1], t2[0], t2[1]];
-      for (let i = 0; i < allFour.length; i++) {
-          for (let j = i + 1; j < allFour.length; j++) {
-              const pairKey = getPartnerKey(allFour[i].player, allFour[j].player);
-              const rPartner = rawPartnerCount.get(pairKey) || 0;
-              const rOpponent = rawOpponentCount.get(pairKey) || 0;
-              const totalEncounters = rPartner + rOpponent;
-              const recDist = Math.min(recentPartnerDistance.get(pairKey) ?? 999, recentOpponentDistance.get(pairKey) ?? 999);
-
-              if (mixPartners) {
-                  if (totalEncounters === 0) {
-                      penalty -= 25000; // Massive bonus for players who have NEVER shared a court
-                  } else if (recDist === 1) {
-                      penalty += 150000;
-                  } else if (recDist === 2) {
-                      penalty += 40000;
-                  } else {
-                      penalty += (partnerHistory.get(pairKey) || 0) * 2000;
-                  }
-              }
-          }
-      }
-
-      // 4. Consecutive Play / Fatigue Penalty inside Match
       allFour.forEach(stat => {
-          if (stat.consecutivePlays >= 3) penalty += 800000;
-          else if (stat.consecutivePlays === 2) penalty += 200000;
+          if (stat.consecutivePlays >= 3) penalty += 1000000;
+          else if (stat.consecutivePlays === 2) penalty += 300000;
       });
 
       // Fixed pairs enforcement
@@ -398,7 +441,18 @@ export const generateNextMatchesGroup = (
       if (avoidGenderSkew && matchType !== MatchType.MIXED_DOUBLES) {
           const t1M = t1.filter(p => p.player.gender === Gender.MALE).length;
           const t2M = t2.filter(p => p.player.gender === Gender.MALE).length;
-          if ((t1M === 2 && t2M === 0) || (t1M === 0 && t2M === 2)) penalty += 1000000;
+          
+          const totalM = t1M + t2M;
+          
+          // 1. Prevent completely unbalanced matchups within the same court (e.g., [M,M] vs [F,F] or 3M1F)
+          if ((t1M === 2 && t2M === 0) || (t1M === 0 && t2M === 2)) {
+              penalty += 1000000; // Men's pair vs Women's pair
+          } else if (totalM === 1 || totalM === 3) {
+              penalty += 1000000; // 3 of one, 1 of another (e.g., [M,M] vs [M,F])
+          } else if (totalM === 0 || totalM === 4) {
+              // 2. Allow all-men or all-women, but apply a slight nudge to encourage mixed doubles if possible
+              penalty += 5000; 
+          }
       }
 
       // Skill level balance
@@ -687,7 +741,7 @@ export const suggestWaitList = (
               stat.consecutiveRests++;
               if (stat.consecutiveRests === 2) {
                   stat.consecutiveRestTwiceCount++;
-                  stat.forcedPlaysRemaining = 2;
+                  stat.forcedPlaysRemaining = 1;
               }
           } else {
               stat.virtualPlayed += playProb;
@@ -712,7 +766,7 @@ export const suggestWaitList = (
       if (s.forcedPlaysRemaining > 0) return -100000000 + effectivePlayed;
       
       let score = effectivePlayed * 10000000;
-      if (s.consecutiveRests >= 2) score -= 8000000;
+      if (s.consecutiveRests >= 2) score -= 80000000;
       else if (s.consecutiveRests === 1) score -= 3000000;
       
       if (s.consecutivePlays >= 3) score += 70000000;
