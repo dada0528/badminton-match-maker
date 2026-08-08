@@ -104,6 +104,16 @@ export const generateNextMatchesGroup = (
 
   const allPastMatches = [...matchHistory, ...activeMatches.filter((m): m is ScheduleItem => m !== null)];
   
+  const pastFourPlayerCombos = new Set<string>();
+  allPastMatches.forEach(match => {
+      const p1 = match.teamA.player1.id;
+      const p2 = match.teamA.player2.id;
+      const p3 = match.teamB.player1.id;
+      const p4 = match.teamB.player2.id;
+      const key = [p1, p2, p3, p4].sort().join('-');
+      pastFourPlayerCombos.add(key);
+  });
+
   // Group matches into rounds based on player overlap to accurately calculate recency
   const rounds: ScheduleItem[][] = [];
   let currentRound: ScheduleItem[] = [];
@@ -427,6 +437,12 @@ export const generateNextMatchesGroup = (
           if (stat.consecutivePlays >= 3) penalty += 1000000;
           else if (stat.consecutivePlays === 2) penalty += 300000;
       });
+
+      // 4. Same 4-player combination penalty
+      const fourKey = [allFour[0].player.id, allFour[1].player.id, allFour[2].player.id, allFour[3].player.id].sort().join('-');
+      if (pastFourPlayerCombos.has(fourKey)) {
+          penalty += 50000000; // massive penalty for exactly the same 4 players on a court
+      }
 
       // Fixed pairs enforcement
       fixedPairs.forEach(([id1, id2]) => {
