@@ -23,6 +23,45 @@ const CourtPlayerBadge = ({ player, onClick }: { player: Player; onClick?: () =>
   </motion.div>
 );
 
+const getLandscapeColsClass = (count: number) => {
+  if (count <= 1) return 'grid-cols-1';
+  if (count === 2) return 'grid-cols-2';
+  if (count === 3) return 'grid-cols-3';
+  if (count === 4) return 'grid-cols-2';
+  if (count === 5 || count === 6) return 'grid-cols-3';
+  if (count >= 7 && count <= 8) return 'grid-cols-4';
+  if (count === 9) return 'grid-cols-3';
+  if (count >= 10 && count <= 12) return 'grid-cols-4';
+  if (count > 12 && count <= 15) return 'grid-cols-5';
+  return 'grid-cols-6';
+};
+
+const getBadgeScaleClass = (count: number) => {
+  if (count <= 1) return 'scale-[2.5] sm:scale-[3]';
+  if (count === 2) return 'scale-150 sm:scale-[2]';
+  if (count === 3) return 'scale-125 sm:scale-150';
+  if (count === 4) return 'scale-150 sm:scale-[1.75]';
+  if (count === 5 || count === 6) return 'scale-125 sm:scale-150';
+  if (count >= 7 && count <= 8) return 'scale-110 sm:scale-125';
+  if (count === 9) return 'scale-125 sm:scale-150';
+  if (count >= 10 && count <= 12) return 'scale-110 sm:scale-125';
+  if (count > 12) return 'scale-90 sm:scale-100';
+  return 'scale-90';
+};
+
+const getScoreScaleClass = (count: number) => {
+  if (count <= 1) return 'scale-150 sm:scale-[2]';
+  if (count === 2) return 'scale-110 sm:scale-150';
+  if (count === 3) return 'scale-90 sm:scale-110';
+  if (count === 4) return 'scale-110 sm:scale-125';
+  if (count === 5 || count === 6) return 'scale-90 sm:scale-110';
+  if (count >= 7 && count <= 8) return 'scale-75 sm:scale-90';
+  if (count === 9) return 'scale-90 sm:scale-110';
+  if (count >= 10 && count <= 12) return 'scale-75 sm:scale-90';
+  if (count > 12) return 'scale-75';
+  return 'scale-75';
+};
+
 const MatchResults: React.FC = () => {
   const { 
     players, 
@@ -699,7 +738,7 @@ const MatchResults: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col items-center bg-slate-950">
-            <div className={`w-full max-w-screen-2xl ${isLandscape ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'flex flex-col gap-6 max-w-4xl'}`}>
+            <div className={`w-full ${isLandscape ? `grid ${getLandscapeColsClass(displayMatches.length)} gap-4 sm:gap-6` : 'flex flex-col gap-6 max-w-4xl'}`}>
                 {displayMatches.map((match, idx) => (
                   <motion.div 
                     initial={{ scale: 0.9, opacity: 0 }}
@@ -741,21 +780,21 @@ const MatchResults: React.FC = () => {
 
                       {match ? (
                         <>
-                          <div className={`absolute top-1/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? 'scale-90' : 'scale-125'}`}>
+                          <div className={`absolute top-1/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
                             <CourtPlayerBadge player={match.teamA.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player1', player: match.teamA.player1 })} />
                           </div>
-                          <div className={`absolute top-3/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? 'scale-90' : 'scale-125'}`}>
+                          <div className={`absolute top-3/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
                             <CourtPlayerBadge player={match.teamA.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player2', player: match.teamA.player2 })} />
                           </div>
-                          <div className={`absolute top-1/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? 'scale-90' : 'scale-125'}`}>
+                          <div className={`absolute top-1/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
                             <CourtPlayerBadge player={match.teamB.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player1', player: match.teamB.player1 })} />
                           </div>
-                          <div className={`absolute top-3/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? 'scale-90' : 'scale-125'}`}>
+                          <div className={`absolute top-3/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
                             <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} />
                           </div>
                           
                           {enableScoring && !isFullScheduleMode && (
-                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-3 bg-slate-950/90 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700/50 ${isLandscape ? 'scale-75' : 'scale-100'}`}>
+                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-3 bg-slate-950/90 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700/50 ${isLandscape ? getScoreScaleClass(displayMatches.length) : 'scale-100'}`}>
                               <input 
                                 type="number" 
                                 value={match.scoreA ?? ''}
