@@ -73,7 +73,14 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
       </span>
       
       {restCount !== undefined && restCount > 0 && (
-        <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 rounded-full text-xs font-black -ml-1">
+        <span 
+          title={restCount >= 2 ? `已連休 ${restCount} 場，下場必定安排上場` : `已連休 ${restCount} 場`}
+          className={`flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full text-xs font-black -ml-1 transition-all ${
+            restCount >= 2 
+              ? 'bg-rose-500 text-white ring-2 ring-rose-300 dark:ring-rose-800 animate-pulse' 
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400'
+          }`}
+        >
           {restCount}
         </span>
       )}
