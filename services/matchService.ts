@@ -145,21 +145,19 @@ export const generateNextMatchesGroup = (
 
   const allPastMatches = [...matchHistory, ...activeMatches.filter((m): m is ScheduleItem => m !== null)];
   
+  const pastMatchesWithDistance: Array<{ set: Set<string>; distance: number; teamAKey: string; teamBKey: string }> = [];
   const pastFourPlayerCombos = new Set<string>();
-  allPastMatches.forEach(match => {
-      const p1 = match.teamA.player1.id;
-      const p2 = match.teamA.player2.id;
-      const p3 = match.teamB.player1.id;
-      const p4 = match.teamB.player2.id;
-      const key = [p1, p2, p3, p4].sort().join('-');
-      pastFourPlayerCombos.add(key);
-  });
+  const pastTrioCombos = new Map<string, number>();
+  const recentTrioDistance = new Map<string, number>();
+  const sharedCourtCount = new Map<string, number>();
+  const recentSharedCourtDistance = new Map<string, number>();
+  const pastTeamKeys = new Set<string>();
 
   const maxCourts = Math.max(activeMatches.length, courtsToGenerate, 1);
   const rounds = groupMatchesIntoRounds(allPastMatches, maxCourts);
   const totalRounds = rounds.length;
 
-  // Recency Decay Calculation
+  // Recency Decay & Past Match Tracking Calculation
   for (let i = 0; i < rounds.length; i++) {
       const batchMatches = rounds[i];
       const distance = totalRounds - i;
@@ -179,7 +177,45 @@ export const generateNextMatchesGroup = (
           const p2 = match.teamA.player2.id;
           const p3 = match.teamB.player1.id;
           const p4 = match.teamB.player2.id;
+          const ids = [p1, p2, p3, p4];
           
+          const tAKey = [p1, p2].sort().join('-');
+          const tBKey = [p3, p4].sort().join('-');
+          pastMatchesWithDistance.push({
+            set: new Set(ids),
+            distance,
+            teamAKey: tAKey,
+            teamBKey: tBKey
+          });
+          pastFourPlayerCombos.add([...ids].sort().join('-'));
+          pastTeamKeys.add(tAKey);
+          pastTeamKeys.add(tBKey);
+
+          // Track all 4 trios in this match
+          const trios = [
+            [p1, p2, p3].sort().join('-'),
+            [p1, p2, p4].sort().join('-'),
+            [p1, p3, p4].sort().join('-'),
+            [p2, p3, p4].sort().join('-'),
+          ];
+          trios.forEach(tKey => {
+            pastTrioCombos.set(tKey, (pastTrioCombos.get(tKey) || 0) + 1);
+            if (!recentTrioDistance.has(tKey) || distance < recentTrioDistance.get(tKey)!) {
+              recentTrioDistance.set(tKey, distance);
+            }
+          });
+
+          // Track all 6 pairs on the same court
+          for (let a = 0; a < ids.length; a++) {
+            for (let b = a + 1; b < ids.length; b++) {
+              const pairKey = getPartnerKey(ids[a], ids[b]);
+              sharedCourtCount.set(pairKey, (sharedCourtCount.get(pairKey) || 0) + 1);
+              if (!recentSharedCourtDistance.has(pairKey) || distance < recentSharedCourtDistance.get(pairKey)!) {
+                recentSharedCourtDistance.set(pairKey, distance);
+              }
+            }
+          }
+
           playersInBatch.add(p1);
           playersInBatch.add(p2);
           playersInBatch.add(p3);
@@ -243,18 +279,18 @@ export const generateNextMatchesGroup = (
       
       // Absolute highest priority for players who have rested 2+ consecutive rounds
       if (s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0) {
-          return -1000000000 * s.consecutiveRests + effectivePlayed * 1000 + Math.random() * 10;
+          return -100000000 * s.consecutiveRests + effectivePlayed * 1000 + Math.random() * 10;
       }
       
-      let score = effectivePlayed * 10000000;
+      let score = effectivePlayed * 1000000;
       
       // Rest rewards (prioritize rested players)
-      if (s.consecutiveRests === 1) score -= 30000000;
+      if (s.consecutiveRests === 1) score -= 2000000;
       
       // Continuous Play / Fatigue Penalties:
-      if (s.consecutivePlays >= 3) score += 70000000;      // 3+ matches in a row -> massive penalty
-      else if (s.consecutivePlays === 2) score += 35000000; // 2 matches in a row -> heavy penalty
-      else if (s.consecutivePlays === 1) score += 10000000; // 1 match in a row -> moderate penalty
+      if (s.consecutivePlays >= 3) score += 8000000;       // 3+ matches in a row -> heavy penalty
+      else if (s.consecutivePlays === 2) score += 3000000; // 2 matches in a row -> moderate penalty
+      else if (s.consecutivePlays === 1) score += 800000;  // 1 match in a row -> mild penalty
       
       score -= (s.consecutiveRestTwiceCount || 0) * 50000;
       score += Math.random() * 500;
@@ -359,13 +395,13 @@ export const generateNextMatchesGroup = (
 
           if (mixPartners) {
               if (count === 0) {
-                  penalty -= 60000;
+                  penalty -= 80000;
               } else {
-                  if (recDist === 1) penalty += 400000;
-                  else if (recDist === 2) penalty += 80000;
-                  else if (recDist === 3) penalty += 20000;
+                  if (recDist === 1) penalty += 600000;
+                  else if (recDist === 2) penalty += 160000;
+                  else if (recDist === 3) penalty += 50000;
                   
-                  penalty += count * 15000;
+                  penalty += count * 35000;
               }
           }
       });
@@ -382,26 +418,30 @@ export const generateNextMatchesGroup = (
           const count = rawOpponentCount.get(opKey) || 0;
           
           if (count === 0) {
-              penalty -= 20000;
+              penalty -= 30000;
           } else {
-              if (recDist === 1) penalty += 200000;
-              else if (recDist === 2) penalty += 40000;
-              else if (recDist === 3) penalty += 10000;
+              if (recDist === 1) penalty += 250000;
+              else if (recDist === 2) penalty += 70000;
+              else if (recDist === 3) penalty += 20000;
               
-              penalty += count * 5000;
+              penalty += count * 12000;
           }
       });
 
-      // 2.5 Cross-court Mixing Penalty: Prevent any 2 players from the same recent match being tied together
-      const allPairs = [pA, pB, ...oppKeys];
-      allPairs.forEach(key => {
-          const pDist = recentPartnerDistance.get(key) ?? 999;
-          const oDist = recentOpponentDistance.get(key) ?? 999;
-          const minDist = Math.min(pDist, oDist);
+      // 2.5 Cross-court Mixing: Bonus for pairing people who have never met on court, penalty for meeting recently
+      const allSixPairs = [pA, pB, ...oppKeys];
+      allSixPairs.forEach(key => {
+          const sDist = recentSharedCourtDistance.get(key) ?? 999;
+          const sCount = sharedCourtCount.get(key) || 0;
           
-          // Heavy penalty if they played in the EXACT SAME match in the previous round
-          if (minDist === 1) penalty += 300000;
-          else if (minDist === 2) penalty += 50000;
+          if (sCount === 0) {
+              penalty -= 40000; // Big bonus for novel matchup
+          } else {
+              if (sDist === 1) penalty += 450000;
+              else if (sDist === 2) penalty += 120000;
+              else if (sDist === 3) penalty += 35000;
+              penalty += sCount * 15000;
+          }
       });
 
       // 3. Consecutive Play / Fatigue Penalty inside Match
@@ -411,16 +451,73 @@ export const generateNextMatchesGroup = (
           else if (stat.consecutivePlays === 2) penalty += 300000;
       });
 
-      // 4. Same 4-player combination penalty
-      const fourKey = [allFour[0].player.id, allFour[1].player.id, allFour[2].player.id, allFour[3].player.id].sort().join('-');
-      if (pastFourPlayerCombos.has(fourKey)) {
-          penalty += 50000000000; // 50 Billion penalty to guarantee it never repeats
+      // 4. Past match overlap check:
+      // Prevent repeating exact 4 players (1-5 Billion penalty)
+      // Prevent repeating 3 players from recent matches (1M - 50M penalty based on recency)
+      const currentFourIds = [allFour[0].player.id, allFour[1].player.id, allFour[2].player.id, allFour[3].player.id];
+      const curFourKey = [...currentFourIds].sort().join('-');
+
+      if (pastFourPlayerCombos.has(curFourKey)) {
+          if (availableStats.length >= 5) {
+              penalty += 5000000000; // 5 Billion: do not repeat exact 4-player group if >= 5 players
+          }
+      }
+
+      for (const pastMatch of pastMatchesWithDistance) {
+          let overlap = 0;
+          for (const id of currentFourIds) {
+              if (pastMatch.set.has(id)) overlap++;
+          }
+
+          if (overlap === 4) {
+              if (availableStats.length === 4) {
+                  // Only 4 players in total - swap team pairings
+                  const curTeamAKey = [t1[0].player.id, t1[1].player.id].sort().join('-');
+                  const curTeamBKey = [t2[0].player.id, t2[1].player.id].sort().join('-');
+                  if (pastMatch.teamAKey === curTeamAKey || pastMatch.teamBKey === curTeamAKey || 
+                      pastMatch.teamAKey === curTeamBKey || pastMatch.teamBKey === curTeamBKey) {
+                      penalty += 500000000;
+                  }
+              } else {
+                  // If repeating 4 players from recent match
+                  if (pastMatch.distance === 1) penalty += 5000000000;
+                  else if (pastMatch.distance === 2) penalty += 3000000000;
+                  else if (pastMatch.distance === 3) penalty += 2000000000;
+                  else penalty += 1000000000;
+              }
+          } else if (overlap === 3) {
+              if (availableStats.length >= 6) {
+                  // Strictly avoid repeating 3 players from any past match whenever pool >= 6
+                  if (pastMatch.distance === 1) penalty += 2000000000;
+                  else if (pastMatch.distance === 2) penalty += 1500000000;
+                  else if (pastMatch.distance === 3) penalty += 1000000000;
+                  else if (pastMatch.distance === 4) penalty += 800000000;
+                  else if (pastMatch.distance === 5) penalty += 600000000;
+                  else penalty += 400000000;
+
+                  const trioKey = currentFourIds.filter(id => pastMatch.set.has(id)).sort().join('-');
+                  const trioCount = pastTrioCombos.get(trioKey) || 0;
+                  penalty += trioCount * 100000000;
+              } else {
+                  // With 5 players, overlap 3 is mathematically required
+                  if (pastMatch.distance === 1) penalty += 30000000;
+                  else if (pastMatch.distance === 2) penalty += 15000000;
+                  else penalty += 5000000;
+
+                  const trioKey = currentFourIds.filter(id => pastMatch.set.has(id)).sort().join('-');
+                  const trioCount = pastTrioCombos.get(trioKey) || 0;
+                  penalty += trioCount * 5000000;
+              }
+          } else if (overlap === 2) {
+              if (pastMatch.distance === 1) penalty += 800000;
+              else if (pastMatch.distance === 2) penalty += 250000;
+              else if (pastMatch.distance === 3) penalty += 60000;
+          }
       }
 
       // 4.5 Reselect ("再選一次") line-up constraints:
       if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
           const rejectedSet = new Set(rejectedPlayerIds);
-          const currentFourIds = [allFour[0].player.id, allFour[1].player.id, allFour[2].player.id, allFour[3].player.id];
           const overlapCount = currentFourIds.filter(id => rejectedSet.has(id)).length;
 
           // How many available eligible players are outside the rejected set?
@@ -518,60 +615,22 @@ export const generateNextMatchesGroup = (
   let candidatePoolF: PlayerStats[] = [];
   let candidatePoolAll: PlayerStats[] = [];
 
-  let guaranteedMandatoryM: PlayerStats[] = [];
-  let guaranteedMandatoryF: PlayerStats[] = [];
-  let guaranteedMandatoryAll: PlayerStats[] = [];
-
   const neededTotal = targetCourts * 4;
 
   if (type === MatchType.MIXED_DOUBLES) {
       const availM = availableStats.filter(s => s.player.gender === Gender.MALE);
       const availF = availableStats.filter(s => s.player.gender === Gender.FEMALE);
-      
-      const mMixNeeded = courtTypes.filter(c => c === MatchType.MIXED_DOUBLES).length * 2;
-      const mMenNeeded = courtTypes.filter(c => c === MatchType.MENS_DOUBLES).length * 4;
-      const mNeeded = mMixNeeded + mMenNeeded;
-
-      const fMixNeeded = courtTypes.filter(c => c === MatchType.MIXED_DOUBLES).length * 2;
-      const fWomenNeeded = courtTypes.filter(c => c === MatchType.WOMENS_DOUBLES).length * 4;
-      const fNeeded = fMixNeeded + fWomenNeeded;
-
-      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
-          candidatePoolM = availM;
-          candidatePoolF = availF;
-          guaranteedMandatoryM = availM.filter(s => isMandatory(s) && !rejectedSet.has(s.player.id)).slice(0, mNeeded);
-          guaranteedMandatoryF = availF.filter(s => isMandatory(s) && !rejectedSet.has(s.player.id)).slice(0, fNeeded);
-      } else {
-          const mandM = availM.filter(isMandatory);
-          const mandF = availF.filter(isMandatory);
-
-          guaranteedMandatoryM = mandM.slice(0, mNeeded);
-          guaranteedMandatoryF = mandF.slice(0, fNeeded);
-
-          const nonMandM = availM.filter(s => !guaranteedMandatoryM.includes(s));
-          const nonMandF = availF.filter(s => !guaranteedMandatoryF.includes(s));
-
-          const extraMNeeded = mNeeded - guaranteedMandatoryM.length;
-          const extraFNeeded = fNeeded - guaranteedMandatoryF.length;
-
-          // Add top non-mandatory candidates plus a few extras for variety
-          candidatePoolM = nonMandM.slice(0, Math.max(extraMNeeded + 6, extraMNeeded));
-          candidatePoolF = nonMandF.slice(0, Math.max(extraFNeeded + 6, extraFNeeded));
-      }
+      candidatePoolM = availM;
+      candidatePoolF = availF;
   } else {
       if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
           candidatePoolAll = [...availableNonRejected, ...availableRejected];
-          guaranteedMandatoryAll = availableNonRejected.filter(isMandatory).slice(0, neededTotal);
       } else {
-          const mand = availableStats.filter(isMandatory);
-          guaranteedMandatoryAll = mand.slice(0, neededTotal);
-          const nonMand = availableStats.filter(s => !guaranteedMandatoryAll.includes(s));
-          const extraNeeded = neededTotal - guaranteedMandatoryAll.length;
-          candidatePoolAll = nonMand.slice(0, Math.max(extraNeeded + 8, extraNeeded));
+          candidatePoolAll = availableStats;
       }
   }
 
-  const iterations = 3000;
+  const iterations = 4000;
   
   for (let i = 0; i < iterations; i++) {
      let cost = 0;
@@ -587,11 +646,21 @@ export const generateNextMatchesGroup = (
          const fWomenNeeded = courtTypes.filter(c => c === MatchType.WOMENS_DOUBLES).length * 4;
          const fNeeded = fMixNeeded + fWomenNeeded;
 
-         const neededMFromPool = Math.max(0, mNeeded - guaranteedMandatoryM.length);
-         const neededFFromPool = Math.max(0, fNeeded - guaranteedMandatoryF.length);
+         const mandM = candidatePoolM.filter(isMandatory);
+         const mandF = candidatePoolF.filter(isMandatory);
 
-         const selectedM = [...guaranteedMandatoryM, ...shuffle(candidatePoolM).slice(0, neededMFromPool)];
-         const selectedF = [...guaranteedMandatoryF, ...shuffle(candidatePoolF).slice(0, neededFFromPool)];
+         // Take at most 1 mandatory player per court to prevent locking past matches into rigid blocks
+         const takeMandM = Math.min(targetCourts, mandM.length);
+         const takeMandF = Math.min(targetCourts, mandF.length);
+
+         const pickedMandM = shuffle(mandM).slice(0, takeMandM);
+         const pickedMandF = shuffle(mandF).slice(0, takeMandF);
+
+         const remM = candidatePoolM.filter(s => !pickedMandM.includes(s));
+         const remF = candidatePoolF.filter(s => !pickedMandF.includes(s));
+
+         const selectedM = [...pickedMandM, ...shuffle(remM).slice(0, Math.max(0, mNeeded - pickedMandM.length))];
+         const selectedF = [...pickedMandF, ...shuffle(remF).slice(0, Math.max(0, fNeeded - pickedMandF.length))];
          sampledPool = [...selectedM, ...selectedF];
      } else {
          if (rejectedPlayerIds && rejectedPlayerIds.length > 0 && availableNonRejected.length > 0) {
@@ -604,8 +673,13 @@ export const generateNextMatchesGroup = (
              const poolRemaining = [...availableNonRejected.filter(s => !pickedNonRej.includes(s)), ...availableRejected];
              sampledPool = [...pickedNonRej, ...shuffle(poolRemaining).slice(0, neededRemaining)];
          } else {
-             const neededFromPool = Math.max(0, neededTotal - guaranteedMandatoryAll.length);
-             sampledPool = [...guaranteedMandatoryAll, ...shuffle(candidatePoolAll).slice(0, neededFromPool)];
+             const mand = candidatePoolAll.filter(isMandatory);
+             // Take at most 2 mandatory players per court to avoid clustering exact 4 players from same past match
+             const takeMand = Math.min(targetCourts * 2, mand.length);
+             const pickedMand = shuffle(mand).slice(0, takeMand);
+             const remAll = candidatePoolAll.filter(s => !pickedMand.includes(s));
+             const neededRemaining = Math.max(0, neededTotal - pickedMand.length);
+             sampledPool = [...pickedMand, ...shuffle(remAll).slice(0, neededRemaining)];
          }
      }
 
