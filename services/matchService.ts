@@ -80,7 +80,7 @@ const groupMatchesIntoRounds = (matches: ScheduleItem[], maxCourts: number): Sch
 export const generateNextMatchesGroup = (
   allPlayers: Player[],
   matchHistory: ScheduleItem[],
-  activeMatches: ScheduleItem[],
+  activeMatches: (ScheduleItem | null)[],
   mixPartners: boolean,
   avoidGenderSkew: boolean,
   type: MatchType,
@@ -90,7 +90,9 @@ export const generateNextMatchesGroup = (
   startCourtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
   skillMode: SkillMode = 'BALANCED',
-  startSequence: number = 1
+  startSequence: number = 1,
+  rejectedPlayerIds?: string[],
+  rejectedTeamKeys?: string[]
 ): { matches: ScheduleItem[], error: string | null, notice?: string | null } => {
 
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
@@ -415,6 +417,44 @@ export const generateNextMatchesGroup = (
           penalty += 50000000000; // 50 Billion penalty to guarantee it never repeats
       }
 
+      // 4.5 Reselect ("再選一次") line-up constraints:
+      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
+          const rejectedSet = new Set(rejectedPlayerIds);
+          const currentFourIds = [allFour[0].player.id, allFour[1].player.id, allFour[2].player.id, allFour[3].player.id];
+          const overlapCount = currentFourIds.filter(id => rejectedSet.has(id)).length;
+
+          // How many available eligible players are outside the rejected set?
+          const nonRejectedAvailableCount = availableStats.filter(s => !rejectedSet.has(s.player.id)).length;
+
+          // If there are at least 2 non-rejected players available, overlap can be at most 2.
+          // If only 1 non-rejected player is available (e.g. 5 total available), overlap can be at most 3.
+          // If 0 non-rejected players available (e.g. 4 total available), overlap is 4, but team pairings must change.
+          let maxAllowedOverlap = 2;
+          if (nonRejectedAvailableCount >= 2) {
+              maxAllowedOverlap = 2;
+          } else if (nonRejectedAvailableCount === 1) {
+              maxAllowedOverlap = 3;
+          } else {
+              maxAllowedOverlap = 4;
+          }
+
+          if (overlapCount > maxAllowedOverlap) {
+              penalty += 50000000000; // Strictly forbidden
+          }
+
+          if (overlapCount === 4) {
+              // Same 4 players - ensure teams/partners are different
+              const curTeamAKey = getTeamKey(t1[0].player.id, t1[1].player.id);
+              const curTeamBKey = getTeamKey(t2[0].player.id, t2[1].player.id);
+              if (rejectedTeamKeys && (rejectedTeamKeys.includes(curTeamAKey) || rejectedTeamKeys.includes(curTeamBKey))) {
+                  penalty += 50000000000; // Disallow exact same team pairings
+              }
+          }
+
+          // Preference for even fewer overlaps when possible (e.g. 0 or 1 overlap vs 2)
+          penalty += overlapCount * 50000;
+      }
+
       // Fixed pairs enforcement
       fixedPairs.forEach(([id1, id2]) => {
           const inT1 = t1.some(p => p.player.id === id1) && t1.some(p => p.player.id === id2);
@@ -466,6 +506,10 @@ export const generateNextMatchesGroup = (
       return penalty;
   };
 
+  const rejectedSet = new Set(rejectedPlayerIds || []);
+  const availableNonRejected = availableStats.filter(s => !rejectedSet.has(s.player.id));
+  const availableRejected = availableStats.filter(s => rejectedSet.has(s.player.id));
+
   // Determine guaranteed mandatory players (players who rested >= 2 matches)
   const isMandatory = (s: PlayerStats) => s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0;
   
@@ -492,27 +536,39 @@ export const generateNextMatchesGroup = (
       const fWomenNeeded = courtTypes.filter(c => c === MatchType.WOMENS_DOUBLES).length * 4;
       const fNeeded = fMixNeeded + fWomenNeeded;
 
-      const mandM = availM.filter(isMandatory);
-      const mandF = availF.filter(isMandatory);
+      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
+          candidatePoolM = availM;
+          candidatePoolF = availF;
+          guaranteedMandatoryM = availM.filter(s => isMandatory(s) && !rejectedSet.has(s.player.id)).slice(0, mNeeded);
+          guaranteedMandatoryF = availF.filter(s => isMandatory(s) && !rejectedSet.has(s.player.id)).slice(0, fNeeded);
+      } else {
+          const mandM = availM.filter(isMandatory);
+          const mandF = availF.filter(isMandatory);
 
-      guaranteedMandatoryM = mandM.slice(0, mNeeded);
-      guaranteedMandatoryF = mandF.slice(0, fNeeded);
+          guaranteedMandatoryM = mandM.slice(0, mNeeded);
+          guaranteedMandatoryF = mandF.slice(0, fNeeded);
 
-      const nonMandM = availM.filter(s => !guaranteedMandatoryM.includes(s));
-      const nonMandF = availF.filter(s => !guaranteedMandatoryF.includes(s));
+          const nonMandM = availM.filter(s => !guaranteedMandatoryM.includes(s));
+          const nonMandF = availF.filter(s => !guaranteedMandatoryF.includes(s));
 
-      const extraMNeeded = mNeeded - guaranteedMandatoryM.length;
-      const extraFNeeded = fNeeded - guaranteedMandatoryF.length;
+          const extraMNeeded = mNeeded - guaranteedMandatoryM.length;
+          const extraFNeeded = fNeeded - guaranteedMandatoryF.length;
 
-      // Add top non-mandatory candidates plus a few extras for variety
-      candidatePoolM = nonMandM.slice(0, Math.max(extraMNeeded + 6, extraMNeeded));
-      candidatePoolF = nonMandF.slice(0, Math.max(extraFNeeded + 6, extraFNeeded));
+          // Add top non-mandatory candidates plus a few extras for variety
+          candidatePoolM = nonMandM.slice(0, Math.max(extraMNeeded + 6, extraMNeeded));
+          candidatePoolF = nonMandF.slice(0, Math.max(extraFNeeded + 6, extraFNeeded));
+      }
   } else {
-      const mand = availableStats.filter(isMandatory);
-      guaranteedMandatoryAll = mand.slice(0, neededTotal);
-      const nonMand = availableStats.filter(s => !guaranteedMandatoryAll.includes(s));
-      const extraNeeded = neededTotal - guaranteedMandatoryAll.length;
-      candidatePoolAll = nonMand.slice(0, Math.max(extraNeeded + 8, extraNeeded));
+      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
+          candidatePoolAll = [...availableNonRejected, ...availableRejected];
+          guaranteedMandatoryAll = availableNonRejected.filter(isMandatory).slice(0, neededTotal);
+      } else {
+          const mand = availableStats.filter(isMandatory);
+          guaranteedMandatoryAll = mand.slice(0, neededTotal);
+          const nonMand = availableStats.filter(s => !guaranteedMandatoryAll.includes(s));
+          const extraNeeded = neededTotal - guaranteedMandatoryAll.length;
+          candidatePoolAll = nonMand.slice(0, Math.max(extraNeeded + 8, extraNeeded));
+      }
   }
 
   const iterations = 3000;
@@ -538,8 +594,19 @@ export const generateNextMatchesGroup = (
          const selectedF = [...guaranteedMandatoryF, ...shuffle(candidatePoolF).slice(0, neededFFromPool)];
          sampledPool = [...selectedM, ...selectedF];
      } else {
-         const neededFromPool = Math.max(0, neededTotal - guaranteedMandatoryAll.length);
-         sampledPool = [...guaranteedMandatoryAll, ...shuffle(candidatePoolAll).slice(0, neededFromPool)];
+         if (rejectedPlayerIds && rejectedPlayerIds.length > 0 && availableNonRejected.length > 0) {
+             const nonRejCount = availableNonRejected.length;
+             const maxAllowed = nonRejCount >= 2 ? 2 : (nonRejCount === 1 ? 3 : 4);
+             const minFromNonRej = Math.min(nonRejCount, 4 - maxAllowed);
+             const takeNonRej = Math.min(nonRejCount, Math.max(minFromNonRej, Math.floor(Math.random() * (nonRejCount + 1))));
+             const pickedNonRej = shuffle(availableNonRejected).slice(0, takeNonRej);
+             const neededRemaining = Math.max(0, neededTotal - pickedNonRej.length);
+             const poolRemaining = [...availableNonRejected.filter(s => !pickedNonRej.includes(s)), ...availableRejected];
+             sampledPool = [...pickedNonRej, ...shuffle(poolRemaining).slice(0, neededRemaining)];
+         } else {
+             const neededFromPool = Math.max(0, neededTotal - guaranteedMandatoryAll.length);
+             sampledPool = [...guaranteedMandatoryAll, ...shuffle(candidatePoolAll).slice(0, neededFromPool)];
+         }
      }
 
      let availablePool = [...sampledPool];
@@ -662,7 +729,7 @@ export const generateNextMatchesGroup = (
 export const generateNextMatch = (
   allPlayers: Player[],
   matchHistory: ScheduleItem[],
-  activeMatches: ScheduleItem[],
+  activeMatches: (ScheduleItem | null)[],
   mixPartners: boolean,
   avoidGenderSkew: boolean,
   type: MatchType,
@@ -670,10 +737,12 @@ export const generateNextMatch = (
   fixedPairs: Array<[string, string]> = [],
   courtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
-  skillMode: SkillMode = 'BALANCED'
+  skillMode: SkillMode = 'BALANCED',
+  rejectedPlayerIds?: string[],
+  rejectedTeamKeys?: string[]
 ): { match: ScheduleItem | null, error: string | null, notice?: string | null } => {
     const result = generateNextMatchesGroup(
-        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode
+        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1, rejectedPlayerIds, rejectedTeamKeys
     );
     if (result.error || result.matches.length === 0) return { match: null, error: result.error, notice: result.notice };
     return { match: result.matches[0], error: null, notice: result.notice };

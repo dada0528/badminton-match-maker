@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
+import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, RefreshCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
@@ -165,6 +165,62 @@ const MatchResults: React.FC = () => {
     } else {
         endMatch(courtIndex, result.match);
         if (useStore.getState().autoVoiceEnabled && result.match) {
+            handleSpeak(result.match);
+        }
+    }
+  };
+
+  const handleReselectMatch = (courtIndex: number) => {
+    const currentMatch = activeMatches[courtIndex];
+    if (!currentMatch) return;
+
+    let eligiblePlayers = [...players].filter(p => p.status !== 'SUSPENDED');
+    if (scheduleType === MatchType.MENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.MALE);
+    if (scheduleType === MatchType.WOMENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.FEMALE);
+
+    if (eligiblePlayers.length < 4) {
+        alert('總人數不足 4 人，無法重新安排出賽名單');
+        return;
+    }
+
+    const rejectedPlayerIds = [
+        currentMatch.teamA.player1.id,
+        currentMatch.teamA.player2.id,
+        currentMatch.teamB.player1.id,
+        currentMatch.teamB.player2.id
+    ];
+
+    const rejectedTeamKeys = [
+        [currentMatch.teamA.player1.id, currentMatch.teamA.player2.id].sort().join('-'),
+        [currentMatch.teamB.player1.id, currentMatch.teamB.player2.id].sort().join('-')
+    ];
+
+    const tempActiveMatches = [...activeMatches];
+    tempActiveMatches[courtIndex] = null;
+
+    const result = generateNextMatch(
+        players,
+        matchHistory, // Do NOT commit previous match to history
+        tempActiveMatches,
+        mixPartners,
+        avoidGenderSkew,
+        scheduleType,
+        enableSkillLevel,
+        fixedPairs,
+        courtIndex + 1,
+        [],
+        skillMode,
+        rejectedPlayerIds,
+        rejectedTeamKeys
+    );
+
+    if (result.error) {
+        alert(result.error);
+    } else if (result.match) {
+        const newActive = [...activeMatches];
+        newActive[courtIndex] = result.match;
+        useStore.getState().setActiveMatches(newActive);
+        if (useStore.getState().autoVoiceEnabled) {
             handleSpeak(result.match);
         }
     }
@@ -595,13 +651,25 @@ const MatchResults: React.FC = () => {
                                 >
                                    {match ? '換下一組' : '開始安排'}
                                 </motion.button>
+                                {match && (
+                                   <motion.button
+                                     whileHover={{ scale: 1.05 }}
+                                     whileTap={{ scale: 0.95 }}
+                                     onClick={() => handleReselectMatch(idx)}
+                                     title="對出場名單不滿意？重新再安排出賽名單"
+                                     className="px-3 sm:px-3.5 py-3 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-colors flex items-center justify-center gap-1.5 border border-amber-200/60 dark:border-amber-700/50 shrink-0"
+                                   >
+                                      <RefreshCw size={15} className="text-amber-600 dark:text-amber-400" />
+                                      <span>再選一次</span>
+                                   </motion.button>
+                                )}
                                 {matchHistory.some(m => m.court === idx + 1) && (
                                    <motion.button
                                      whileHover={{ scale: 1.05 }}
                                      whileTap={{ scale: 0.95 }}
                                      onClick={() => undoMatch(idx)}
                                      title="還原上一場"
-                                     className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-500 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-xl font-bold shadow-sm transition-colors flex items-center justify-center"
+                                     className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-500 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-xl font-bold shadow-sm transition-colors flex items-center justify-center shrink-0"
                                    >
                                       <RotateCw size={18} className="-scale-x-100" />
                                    </motion.button>
@@ -836,13 +904,25 @@ const MatchResults: React.FC = () => {
                          >
                             {match ? '換下一組' : '開始安排'}
                          </motion.button>
+                         {match && (
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleReselectMatch(idx)}
+                              title="對出場名單不滿意？重新再安排出賽名單"
+                              className="px-5 py-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold text-base shadow-lg transition-colors flex items-center justify-center gap-2 shrink-0"
+                            >
+                               <RefreshCw size={20} className="text-amber-400" />
+                               <span>再選一次</span>
+                            </motion.button>
+                         )}
                          {matchHistory.some(m => m.court === idx + 1) && (
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                               onClick={() => undoMatch(idx)}
                               title="還原上一場"
-                              className="px-5 py-4 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-xl font-bold shadow-lg transition-colors flex items-center justify-center border border-red-800/50"
+                              className="px-5 py-4 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-xl font-bold shadow-lg transition-colors flex items-center justify-center border border-red-800/50 shrink-0"
                             >
                                <RotateCw size={22} className="-scale-x-100" />
                             </motion.button>
