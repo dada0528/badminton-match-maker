@@ -29,7 +29,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, type }) => {
     {
       title: '記錄與分享',
       icon: <Share2 className="text-purple-500" size={20} />,
-      items: ['計分功能：自由選擇是否開啟比分輸入', '圖片匯出：將賽程表轉為圖片，輕鬆分享群組']
+      items: ['圖片匯出：將賽程表轉為圖片，輕鬆分享群組']
     }
   ];
 

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, RefreshCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
+import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
@@ -49,19 +49,6 @@ const getBadgeScaleClass = (count: number) => {
   return 'scale-90';
 };
 
-const getScoreScaleClass = (count: number) => {
-  if (count <= 1) return 'scale-150 sm:scale-[2]';
-  if (count === 2) return 'scale-110 sm:scale-150';
-  if (count === 3) return 'scale-90 sm:scale-110';
-  if (count === 4) return 'scale-110 sm:scale-125';
-  if (count === 5 || count === 6) return 'scale-90 sm:scale-110';
-  if (count >= 7 && count <= 8) return 'scale-75 sm:scale-90';
-  if (count === 9) return 'scale-90 sm:scale-110';
-  if (count >= 10 && count <= 12) return 'scale-75 sm:scale-90';
-  if (count > 12) return 'scale-75';
-  return 'scale-75';
-};
-
 const MatchResults: React.FC = () => {
   const { 
     players, 
@@ -72,13 +59,11 @@ const MatchResults: React.FC = () => {
     errorMsg,
     enableSkillLevel,
     skillMode,
-    updateMatchScore,
     endMatch,
     undoMatch,
     mixPartners,
     avoidGenderSkew,
     fixedPairs,
-    enableScoring,
     courtNames,
     autoVoiceEnabled,
     setAutoVoiceEnabled,
@@ -165,62 +150,6 @@ const MatchResults: React.FC = () => {
     } else {
         endMatch(courtIndex, result.match);
         if (useStore.getState().autoVoiceEnabled && result.match) {
-            handleSpeak(result.match);
-        }
-    }
-  };
-
-  const handleReselectMatch = (courtIndex: number) => {
-    const currentMatch = activeMatches[courtIndex];
-    if (!currentMatch) return;
-
-    let eligiblePlayers = [...players].filter(p => p.status !== 'SUSPENDED');
-    if (scheduleType === MatchType.MENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.MALE);
-    if (scheduleType === MatchType.WOMENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.FEMALE);
-
-    if (eligiblePlayers.length < 4) {
-        alert('總人數不足 4 人，無法重新安排出賽名單');
-        return;
-    }
-
-    const rejectedPlayerIds = [
-        currentMatch.teamA.player1.id,
-        currentMatch.teamA.player2.id,
-        currentMatch.teamB.player1.id,
-        currentMatch.teamB.player2.id
-    ];
-
-    const rejectedTeamKeys = [
-        [currentMatch.teamA.player1.id, currentMatch.teamA.player2.id].sort().join('-'),
-        [currentMatch.teamB.player1.id, currentMatch.teamB.player2.id].sort().join('-')
-    ];
-
-    const tempActiveMatches = [...activeMatches];
-    tempActiveMatches[courtIndex] = null;
-
-    const result = generateNextMatch(
-        players,
-        matchHistory, // Do NOT commit previous match to history
-        tempActiveMatches,
-        mixPartners,
-        avoidGenderSkew,
-        scheduleType,
-        enableSkillLevel,
-        fixedPairs,
-        courtIndex + 1,
-        [],
-        skillMode,
-        rejectedPlayerIds,
-        rejectedTeamKeys
-    );
-
-    if (result.error) {
-        alert(result.error);
-    } else if (result.match) {
-        const newActive = [...activeMatches];
-        newActive[courtIndex] = result.match;
-        useStore.getState().setActiveMatches(newActive);
-        if (useStore.getState().autoVoiceEnabled) {
             handleSpeak(result.match);
         }
     }
@@ -601,33 +530,6 @@ const MatchResults: React.FC = () => {
                                  <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} />
                                </div>
                                
-                               {/* Score Overlay */}
-                               {enableScoring && !isFullScheduleMode && (
-                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-1.5 bg-slate-900/80 p-2 rounded-xl shadow-2xl backdrop-blur-md border border-slate-700" data-html2canvas-ignore="true">
-                                   <input 
-                                     type="number" 
-                                     value={match.scoreA ?? ''}
-                                     onChange={(e) => updateMatchScore(idx, e.target.value === '' ? undefined : parseInt(e.target.value), match.scoreB)}
-                                     className="w-10 h-8 text-center text-sm font-black bg-slate-800 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 text-white shadow-inner placeholder-slate-600"
-                                     placeholder="-"
-                                   />
-                                   <span className="text-emerald-400 font-black text-sm">:</span>
-                                   <input 
-                                     type="number" 
-                                     value={match.scoreB ?? ''}
-                                     onChange={(e) => updateMatchScore(idx, match.scoreA, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                     className="w-10 h-8 text-center text-sm font-black bg-slate-800 border border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 text-white shadow-inner placeholder-slate-600"
-                                     placeholder="-"
-                                   />
-                                 </div>
-                               )}
-                               
-                               {/* Static Score for Export */}
-                               {enableScoring && !isFullScheduleMode && (match.scoreA !== undefined || match.scoreB !== undefined) && (
-                                 <div className="hidden html2canvas-show absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-slate-900/90 px-4 py-1.5 rounded-lg shadow-2xl text-lg font-black text-white border border-slate-700">
-                                   {match.scoreA ?? '-'} : {match.scoreB ?? '-'}
-                                 </div>
-                               )}
                              </>
                            ) : (
                              <div className="absolute inset-0 flex items-center justify-center z-20 bg-slate-900/20">
@@ -651,18 +553,6 @@ const MatchResults: React.FC = () => {
                                 >
                                    {match ? '換下一組' : '開始安排'}
                                 </motion.button>
-                                {match && (
-                                   <motion.button
-                                     whileHover={{ scale: 1.05 }}
-                                     whileTap={{ scale: 0.95 }}
-                                     onClick={() => handleReselectMatch(idx)}
-                                     title="對出場名單不滿意？重新再安排出賽名單"
-                                     className="px-3 sm:px-3.5 py-3 bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-colors flex items-center justify-center gap-1.5 border border-amber-200/60 dark:border-amber-700/50 shrink-0"
-                                   >
-                                      <RefreshCw size={15} className="text-amber-600 dark:text-amber-400" />
-                                      <span>再選一次</span>
-                                   </motion.button>
-                                )}
                                 {matchHistory.some(m => m.court === idx + 1) && (
                                    <motion.button
                                      whileHover={{ scale: 1.05 }}
@@ -861,25 +751,6 @@ const MatchResults: React.FC = () => {
                             <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} />
                           </div>
                           
-                          {enableScoring && !isFullScheduleMode && (
-                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-3 bg-slate-950/90 p-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-slate-700/50 ${isLandscape ? getScoreScaleClass(displayMatches.length) : 'scale-100'}`}>
-                              <input 
-                                type="number" 
-                                value={match.scoreA ?? ''}
-                                onChange={(e) => updateMatchScore(idx, e.target.value === '' ? undefined : parseInt(e.target.value), match.scoreB)}
-                                className="w-16 h-12 text-center text-2xl font-black bg-slate-900 border-2 border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 text-white placeholder-slate-700"
-                                placeholder="-"
-                              />
-                              <span className="text-slate-500 font-black text-2xl">:</span>
-                              <input 
-                                type="number" 
-                                value={match.scoreB ?? ''}
-                                onChange={(e) => updateMatchScore(idx, match.scoreA, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                className="w-16 h-12 text-center text-2xl font-black bg-slate-900 border-2 border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 text-white placeholder-slate-700"
-                                placeholder="-"
-                              />
-                            </div>
-                          )}
                         </>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center z-20">
@@ -904,18 +775,6 @@ const MatchResults: React.FC = () => {
                          >
                             {match ? '換下一組' : '開始安排'}
                          </motion.button>
-                         {match && (
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => handleReselectMatch(idx)}
-                              title="對出場名單不滿意？重新再安排出賽名單"
-                              className="px-5 py-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold text-base shadow-lg transition-colors flex items-center justify-center gap-2 shrink-0"
-                            >
-                               <RefreshCw size={20} className="text-amber-400" />
-                               <span>再選一次</span>
-                            </motion.button>
-                         )}
                          {matchHistory.some(m => m.court === idx + 1) && (
                             <motion.button
                               whileHover={{ scale: 1.05 }}

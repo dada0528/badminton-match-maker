@@ -30,7 +30,6 @@ interface AppState {
   avoidGenderSkew: boolean;
   enableSkillLevel: boolean;
   skillMode: SkillMode;
-  enableScoring: boolean;
   autoVoiceEnabled: boolean;
   firstMatchPlayerIds: string[];
   fixedPairs: Array<[string, string]>;
@@ -62,7 +61,6 @@ interface AppState {
   setActiveMatches: (matches: (ScheduleItem | null)[]) => void;
   setFullSchedule: (schedule: ScheduleItem[]) => void;
   endMatch: (courtIndex: number, nextMatch: ScheduleItem | null) => void;
-  updateMatchScore: (courtIndex: number, scoreA?: number, scoreB?: number) => void;
   undoMatch: (courtIndex: number) => void;
   clearMatchHistory: () => void;
   
@@ -74,7 +72,6 @@ interface AppState {
   setAvoidGenderSkew: (avoid: boolean) => void;
   setEnableSkillLevel: (enable: boolean) => void;
   setSkillMode: (mode: SkillMode) => void;
-  setEnableScoring: (enable: boolean) => void;
   setAutoVoiceEnabled: (enable: boolean) => void;
   setFirstMatchPlayerIds: (ids: string[]) => void;
   setTheme: (theme: 'light' | 'dark') => void;
@@ -104,7 +101,6 @@ export const useStore = create<AppState>()(
       avoidGenderSkew: true,
       enableSkillLevel: false,
       skillMode: 'BALANCED',
-      enableScoring: false,
       autoVoiceEnabled: false,
       firstMatchPlayerIds: [],
       fixedPairs: [],
@@ -239,15 +235,6 @@ export const useStore = create<AppState>()(
           matchHistory: currentMatch ? [...state.matchHistory, currentMatch] : state.matchHistory
         };
       }),
-      
-      updateMatchScore: (courtIndex: number, scoreA?: number, scoreB?: number) => set((state) => {
-        const newActiveMatches = [...state.activeMatches];
-        const match = newActiveMatches[courtIndex];
-        if (match) {
-          newActiveMatches[courtIndex] = { ...match, scoreA, scoreB };
-        }
-        return { activeMatches: newActiveMatches };
-      }),
 
       undoMatch: (courtIndex: number) => set((state) => {
         const history = [...state.matchHistory];
@@ -309,7 +296,6 @@ export const useStore = create<AppState>()(
       setAvoidGenderSkew: (avoidGenderSkew) => set({ avoidGenderSkew }),
       setEnableSkillLevel: (enableSkillLevel) => set({ enableSkillLevel }),
       setSkillMode: (skillMode) => set({ skillMode }),
-      setEnableScoring: (enableScoring) => set({ enableScoring }),
       setAutoVoiceEnabled: (autoVoiceEnabled) => set({ autoVoiceEnabled }),
       setFirstMatchPlayerIds: (firstMatchPlayerIds) => set({ firstMatchPlayerIds }),
       setTheme: (theme) => {
@@ -350,7 +336,6 @@ export const useStore = create<AppState>()(
         avoidGenderSkew: state.avoidGenderSkew,
         enableSkillLevel: state.enableSkillLevel,
         skillMode: state.skillMode,
-        enableScoring: state.enableScoring,
         autoVoiceEnabled: state.autoVoiceEnabled,
         fixedPairs: state.fixedPairs,
         theme: state.theme,

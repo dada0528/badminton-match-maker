@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Calendar, Trophy } from 'lucide-react';
+import { Users, Calendar } from 'lucide-react';
 import Header from './components/Header';
 import PlayerInputSection from './components/PlayerInputSection';
 import ScheduleControls from './components/ScheduleControls';
 import MatchResults from './components/MatchResults';
-import Leaderboard from './components/Leaderboard';
 import { useStore } from './store/useStore';
 import { Gender } from './types';
 
-type Tab = 'players' | 'matches' | 'leaderboard';
+type Tab = 'players' | 'matches';
 
 const App: React.FC = () => {
-  const { players, activeMatches, matchHistory, fullSchedule, errorMsg, history, theme, isFullscreen } = useStore();
+  const { players, activeMatches, fullSchedule, errorMsg, history, theme, isFullscreen } = useStore();
   const [activeTab, setActiveTab] = useState<Tab>('players');
 
   // Stats for tab badges
@@ -20,7 +19,6 @@ const App: React.FC = () => {
   const malesCount = players.filter(p => p.gender === Gender.MALE).length;
   const femalesCount = players.filter(p => p.gender === Gender.FEMALE).length;
   const activeMatchCount = activeMatches.filter(Boolean).length;
-  const totalMatchesCount = matchHistory.length;
 
   // Initialize dark mode
   useEffect(() => {
@@ -103,27 +101,6 @@ const App: React.FC = () => {
                 {activeMatchCount > 0 ? `${activeMatchCount}場進行中` : fullSchedule.length > 0 ? `${fullSchedule.length}場對戰` : '排程中'}
               </span>
             </button>
-
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2.5 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                activeTab === 'leaderboard' 
-                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' 
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/40 dark:hover:bg-slate-700/40'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Trophy size={18} />
-                <span>排行榜</span>
-              </div>
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-extrabold transition-all ${
-                activeTab === 'leaderboard' 
-                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
-                  : 'bg-slate-300/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400'
-              }`}>
-                {totalMatchesCount > 0 ? `完賽 ${totalMatchesCount} 場` : '戰績榜'}
-              </span>
-            </button>
           </div>
 
           {errorMsg && (
@@ -161,18 +138,6 @@ const App: React.FC = () => {
               >
                 <ScheduleControls />
                 <MatchResults />
-              </motion.div>
-            )}
-
-            {activeTab === 'leaderboard' && (
-              <motion.div 
-                key="leaderboard"
-                initial={{ y: 20, opacity: 0 }} 
-                animate={{ y: 0, opacity: 1 }} 
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Leaderboard />
               </motion.div>
             )}
           </div>
@@ -236,30 +201,6 @@ const App: React.FC = () => {
                 <motion.div layoutId="bottomNavIndicator" className="absolute top-0 w-8 h-1 bg-emerald-500 rounded-full" />
               )}
             </button>
-
-            {/* Tab 3: Leaderboard */}
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className={`flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 py-1 px-2 rounded-2xl transition-all relative ${
-                activeTab === 'leaderboard'
-                  ? 'text-emerald-600 dark:text-emerald-400 font-black'
-                  : 'text-slate-500 dark:text-slate-400 font-bold hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <div className="relative">
-                <Trophy size={22} className={activeTab === 'leaderboard' ? 'stroke-[2.5]' : 'stroke-[1.8]'} />
-                {totalMatchesCount > 0 && (
-                  <span className="absolute -top-1.5 -right-3 text-[10px] font-black bg-amber-500 text-white px-1.5 py-0.2 rounded-full min-w-[16px] text-center leading-tight shadow-sm">
-                    {totalMatchesCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[11px] leading-none">戰績榜</span>
-              {activeTab === 'leaderboard' && (
-                <motion.div layoutId="bottomNavIndicator" className="absolute top-0 w-8 h-1 bg-emerald-500 rounded-full" />
-              )}
-            </button>
-
           </div>
         </div>
       )}

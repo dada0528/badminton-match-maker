@@ -38,6 +38,30 @@ interface PlayerStats {
   lastPlayedIndex: number;
 }
 
+// Candidate prioritization score (Fatigue Avoidance & Rest Prioritization)
+const calculateCandidateScore = (s: PlayerStats, addNoise: boolean = true): number => {
+  const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
+  
+  // Absolute highest priority for players who have rested 2+ consecutive rounds
+  if (s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0) {
+      return -100000000 * s.consecutiveRests + effectivePlayed * 1000 + (addNoise ? Math.random() * 10 : 0);
+  }
+  
+  let score = effectivePlayed * 1000000;
+  
+  // Rest rewards (prioritize rested players)
+  if (s.consecutiveRests === 1) score -= 2000000;
+  
+  // Continuous Play / Fatigue Penalties:
+  if (s.consecutivePlays >= 3) score += 8000000;       // 3+ matches in a row -> heavy penalty
+  else if (s.consecutivePlays === 2) score += 3000000; // 2 matches in a row -> moderate penalty
+  else if (s.consecutivePlays === 1) score += 800000;  // 1 match in a row -> mild penalty
+  
+  score -= (s.consecutiveRestTwiceCount || 0) * 50000;
+  if (addNoise) score += Math.random() * 500;
+  return score; 
+};
+
 const groupMatchesIntoRounds = (matches: ScheduleItem[], maxCourts: number): ScheduleItem[][] => {
   const rounds: ScheduleItem[][] = [];
   let currentRound: ScheduleItem[] = [];
@@ -90,9 +114,7 @@ export const generateNextMatchesGroup = (
   startCourtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
   skillMode: SkillMode = 'BALANCED',
-  startSequence: number = 1,
-  rejectedPlayerIds?: string[],
-  rejectedTeamKeys?: string[]
+  startSequence: number = 1
 ): { matches: ScheduleItem[], error: string | null, notice?: string | null } => {
 
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
@@ -273,32 +295,8 @@ export const generateNextMatchesGroup = (
       return { matches: [], error: '可用人數不足以分配所選場地數' };
   }
 
-  // Score calculation for candidate prioritization (Fatigue Avoidance & Rest Prioritization)
-  const getScore = (s: PlayerStats): number => {
-      const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
-      
-      // Absolute highest priority for players who have rested 2+ consecutive rounds
-      if (s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0) {
-          return -100000000 * s.consecutiveRests + effectivePlayed * 1000 + Math.random() * 10;
-      }
-      
-      let score = effectivePlayed * 1000000;
-      
-      // Rest rewards (prioritize rested players)
-      if (s.consecutiveRests === 1) score -= 2000000;
-      
-      // Continuous Play / Fatigue Penalties:
-      if (s.consecutivePlays >= 3) score += 8000000;       // 3+ matches in a row -> heavy penalty
-      else if (s.consecutivePlays === 2) score += 3000000; // 2 matches in a row -> moderate penalty
-      else if (s.consecutivePlays === 1) score += 800000;  // 1 match in a row -> mild penalty
-      
-      score -= (s.consecutiveRestTwiceCount || 0) * 50000;
-      score += Math.random() * 500;
-      return score; 
-  };
-
   const scoreCache = new Map<string, number>();
-  availableStats.forEach(s => scoreCache.set(s.player.id, getScore(s)));
+  availableStats.forEach(s => scoreCache.set(s.player.id, calculateCandidateScore(s, true)));
 
   fixedPairs.forEach(([id1, id2]) => {
       if (scoreCache.has(id1) && scoreCache.has(id2)) {
@@ -333,14 +331,21 @@ export const generateNextMatchesGroup = (
           }
       }
 
+      let remM = availM.length;
+      let remF = availF.length;
+
       for (let c = 0; c < targetCourts; c++) {
           if (c < maxHeadcountMixed) {
               courtTypes.push(MatchType.MIXED_DOUBLES);
+              remM -= 2;
+              remF -= 2;
           } else {
-              if (availM.length - (c * 2) >= 4) {
+              if (remM >= 4) {
                   courtTypes.push(MatchType.MENS_DOUBLES);
-              } else if (availF.length - (c * 2) >= 4) {
+                  remM -= 4;
+              } else if (remF >= 4) {
                   courtTypes.push(MatchType.WOMENS_DOUBLES);
+                  remF -= 4;
               } else {
                   courtTypes.push(MatchType.RANDOM);
               }
@@ -348,7 +353,7 @@ export const generateNextMatchesGroup = (
       }
 
       if (maxHeadcountMixed < targetCourts) {
-          fallbackNotice = `因男女人數不均 (${availM.length}男${availF.length}女)，部分場地已自動轉為雙打/男雙以維持順暢輪替。`;
+          fallbackNotice = `因男女人數不均 (${availM.length}男${availF.length}女)，部分場地已自動轉為男雙/女雙/雙打以維持順暢輪替。`;
       }
   } else {
       courtTypes = Array(targetCourts).fill(type);
@@ -515,43 +520,6 @@ export const generateNextMatchesGroup = (
           }
       }
 
-      // 4.5 Reselect ("再選一次") line-up constraints:
-      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
-          const rejectedSet = new Set(rejectedPlayerIds);
-          const overlapCount = currentFourIds.filter(id => rejectedSet.has(id)).length;
-
-          // How many available eligible players are outside the rejected set?
-          const nonRejectedAvailableCount = availableStats.filter(s => !rejectedSet.has(s.player.id)).length;
-
-          // If there are at least 2 non-rejected players available, overlap can be at most 2.
-          // If only 1 non-rejected player is available (e.g. 5 total available), overlap can be at most 3.
-          // If 0 non-rejected players available (e.g. 4 total available), overlap is 4, but team pairings must change.
-          let maxAllowedOverlap = 2;
-          if (nonRejectedAvailableCount >= 2) {
-              maxAllowedOverlap = 2;
-          } else if (nonRejectedAvailableCount === 1) {
-              maxAllowedOverlap = 3;
-          } else {
-              maxAllowedOverlap = 4;
-          }
-
-          if (overlapCount > maxAllowedOverlap) {
-              penalty += 50000000000; // Strictly forbidden
-          }
-
-          if (overlapCount === 4) {
-              // Same 4 players - ensure teams/partners are different
-              const curTeamAKey = getTeamKey(t1[0].player.id, t1[1].player.id);
-              const curTeamBKey = getTeamKey(t2[0].player.id, t2[1].player.id);
-              if (rejectedTeamKeys && (rejectedTeamKeys.includes(curTeamAKey) || rejectedTeamKeys.includes(curTeamBKey))) {
-                  penalty += 50000000000; // Disallow exact same team pairings
-              }
-          }
-
-          // Preference for even fewer overlaps when possible (e.g. 0 or 1 overlap vs 2)
-          penalty += overlapCount * 50000;
-      }
-
       // Fixed pairs enforcement
       fixedPairs.forEach(([id1, id2]) => {
           const inT1 = t1.some(p => p.player.id === id1) && t1.some(p => p.player.id === id2);
@@ -603,10 +571,6 @@ export const generateNextMatchesGroup = (
       return penalty;
   };
 
-  const rejectedSet = new Set(rejectedPlayerIds || []);
-  const availableNonRejected = availableStats.filter(s => !rejectedSet.has(s.player.id));
-  const availableRejected = availableStats.filter(s => rejectedSet.has(s.player.id));
-
   // Determine guaranteed mandatory players (players who rested >= 2 matches)
   const isMandatory = (s: PlayerStats) => s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0;
   
@@ -623,11 +587,7 @@ export const generateNextMatchesGroup = (
       candidatePoolM = availM;
       candidatePoolF = availF;
   } else {
-      if (rejectedPlayerIds && rejectedPlayerIds.length > 0) {
-          candidatePoolAll = [...availableNonRejected, ...availableRejected];
-      } else {
-          candidatePoolAll = availableStats;
-      }
+      candidatePoolAll = availableStats;
   }
 
   const iterations = 4000;
@@ -663,25 +623,27 @@ export const generateNextMatchesGroup = (
          const selectedF = [...pickedMandF, ...shuffle(remF).slice(0, Math.max(0, fNeeded - pickedMandF.length))];
          sampledPool = [...selectedM, ...selectedF];
      } else {
-         if (rejectedPlayerIds && rejectedPlayerIds.length > 0 && availableNonRejected.length > 0) {
-             const nonRejCount = availableNonRejected.length;
-             const maxAllowed = nonRejCount >= 2 ? 2 : (nonRejCount === 1 ? 3 : 4);
-             const minFromNonRej = Math.min(nonRejCount, 4 - maxAllowed);
-             const takeNonRej = Math.min(nonRejCount, Math.max(minFromNonRej, Math.floor(Math.random() * (nonRejCount + 1))));
-             const pickedNonRej = shuffle(availableNonRejected).slice(0, takeNonRej);
-             const neededRemaining = Math.max(0, neededTotal - pickedNonRej.length);
-             const poolRemaining = [...availableNonRejected.filter(s => !pickedNonRej.includes(s)), ...availableRejected];
-             sampledPool = [...pickedNonRej, ...shuffle(poolRemaining).slice(0, neededRemaining)];
-         } else {
-             const mand = candidatePoolAll.filter(isMandatory);
-             // Take at most 2 mandatory players per court to avoid clustering exact 4 players from same past match
-             const takeMand = Math.min(targetCourts * 2, mand.length);
-             const pickedMand = shuffle(mand).slice(0, takeMand);
-             const remAll = candidatePoolAll.filter(s => !pickedMand.includes(s));
-             const neededRemaining = Math.max(0, neededTotal - pickedMand.length);
-             sampledPool = [...pickedMand, ...shuffle(remAll).slice(0, neededRemaining)];
-         }
+         const mand = candidatePoolAll.filter(isMandatory);
+         // Take at most 2 mandatory players per court to avoid clustering exact 4 players from same past match
+         const takeMand = Math.min(targetCourts * 2, mand.length);
+         const pickedMand = shuffle(mand).slice(0, takeMand);
+         const remAll = candidatePoolAll.filter(s => !pickedMand.includes(s));
+         const neededRemaining = Math.max(0, neededTotal - pickedMand.length);
+         sampledPool = [...pickedMand, ...shuffle(remAll).slice(0, neededRemaining)];
      }
+
+     // If fixed pairs are partially in sampledPool, include their partners so they can be matched
+     fixedPairs.forEach(([id1, id2]) => {
+         const has1 = sampledPool.some(s => s.player.id === id1);
+         const has2 = sampledPool.some(s => s.player.id === id2);
+         if (has1 && !has2) {
+             const p2 = availableStats.find(s => s.player.id === id2);
+             if (p2) sampledPool.push(p2);
+         } else if (has2 && !has1) {
+             const p1 = availableStats.find(s => s.player.id === id1);
+             if (p1) sampledPool.push(p1);
+         }
+     });
 
      let availablePool = [...sampledPool];
 
@@ -811,12 +773,10 @@ export const generateNextMatch = (
   fixedPairs: Array<[string, string]> = [],
   courtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
-  skillMode: SkillMode = 'BALANCED',
-  rejectedPlayerIds?: string[],
-  rejectedTeamKeys?: string[]
+  skillMode: SkillMode = 'BALANCED'
 ): { match: ScheduleItem | null, error: string | null, notice?: string | null } => {
     const result = generateNextMatchesGroup(
-        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1, rejectedPlayerIds, rejectedTeamKeys
+        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1
     );
     if (result.error || result.matches.length === 0) return { match: null, error: result.error, notice: result.notice };
     return { match: result.matches[0], error: null, notice: result.notice };
@@ -959,24 +919,7 @@ export const suggestWaitList = (
 
   const waitingStats = Array.from(statsMap.values()).filter(s => !activePlayerIds.has(s.player.id));
   
-  const getScore = (s: PlayerStats): number => {
-      const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
-      if (s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0) {
-          return -1000000000 * s.consecutiveRests + effectivePlayed;
-      }
-      
-      let score = effectivePlayed * 10000000;
-      if (s.consecutiveRests === 1) score -= 30000000;
-      
-      if (s.consecutivePlays >= 3) score += 70000000;
-      else if (s.consecutivePlays === 2) score += 35000000;
-      else if (s.consecutivePlays === 1) score += 10000000;
-      
-      score -= (s.consecutiveRestTwiceCount || 0) * 50000;
-      return score; 
-  };
-
-  waitingStats.sort((a, b) => getScore(a) - getScore(b));
+  waitingStats.sort((a, b) => calculateCandidateScore(a, false) - calculateCandidateScore(b, false));
 
   return waitingStats.map(s => ({
     player: s.player,

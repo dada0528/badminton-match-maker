@@ -31,7 +31,6 @@ const ScheduleControls: React.FC = () => {
     avoidGenderSkew,
     enableSkillLevel,
     skillMode,
-    enableScoring,
     autoVoiceEnabled,
     fixedPairs,
     setRounds, 
@@ -43,7 +42,6 @@ const ScheduleControls: React.FC = () => {
     setAvoidGenderSkew,
     setEnableSkillLevel,
     setSkillMode,
-    setEnableScoring,
     setAutoVoiceEnabled,
     setErrorMsg,
     firstMatchPlayerIds,
@@ -300,12 +298,6 @@ const ScheduleControls: React.FC = () => {
                  label="避免男雙vs女雙" 
                  title="避免男男vs女女"
                  colorClass="bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-500 text-blue-700 dark:text-blue-300 shadow-sm"
-               />
-               <ControlToggle 
-                 active={enableScoring} 
-                 onClick={() => setEnableScoring(!enableScoring)}
-                 label="開啟計分板" 
-                 colorClass="bg-amber-50 dark:bg-amber-900/40 border-amber-300 dark:border-amber-500 text-amber-700 dark:text-amber-300 shadow-sm"
                />
                <ControlToggle 
                  active={autoVoiceEnabled} 
