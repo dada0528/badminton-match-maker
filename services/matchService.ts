@@ -40,22 +40,18 @@ interface PlayerStats {
 
 // Candidate prioritization score (Fatigue Avoidance & Rest Prioritization)
 const calculateCandidateScore = (s: PlayerStats, addNoise: boolean = true): number => {
-  const effectivePlayed = s.played + Math.floor(s.virtualPlayed);
-  
-  // Absolute highest priority for players who have rested 2+ consecutive rounds
-  if (s.consecutiveRests >= 2 || s.forcedPlaysRemaining > 0) {
-      return -100000000 * s.consecutiveRests + effectivePlayed * 1000 + (addNoise ? Math.random() * 10 : 0);
-  }
+  const effectivePlayed = s.played + Math.floor(s.virtualPlayed) + (s.player.missedPlaysOffset || 0);
   
   let score = effectivePlayed * 1000000;
   
-  // Rest rewards (prioritize rested players)
-  if (s.consecutiveRests === 1) score -= 2000000;
+  // Continuous Play / Fatigue Penalties (Prioritized strictly to prevent over-fatigue)
+  if (s.consecutivePlays >= 3) score += 50000000;      // 3+ matches in a row -> absolute penalty
+  else if (s.consecutivePlays === 2) score += 8000000; // 2 matches in a row -> heavy penalty
+  else if (s.consecutivePlays === 1) score += 500000;  // 1 match in a row -> mild penalty
   
-  // Continuous Play / Fatigue Penalties:
-  if (s.consecutivePlays >= 3) score += 8000000;       // 3+ matches in a row -> heavy penalty
-  else if (s.consecutivePlays === 2) score += 3000000; // 2 matches in a row -> moderate penalty
-  else if (s.consecutivePlays === 1) score += 800000;  // 1 match in a row -> mild penalty
+  // Rest rewards (prioritize rested players)
+  if (s.consecutiveRests >= 2) score -= 3000000 * s.consecutiveRests;
+  else if (s.consecutiveRests === 1) score -= 1500000;
   
   score -= (s.consecutiveRestTwiceCount || 0) * 50000;
   if (addNoise) score += Math.random() * 500;

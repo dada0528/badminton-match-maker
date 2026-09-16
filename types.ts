@@ -14,6 +14,7 @@ export interface Player {
   level?: number;
   createdAt?: number;
   status?: PlayerStatus;
+  missedPlaysOffset?: number;
 }
 
 export interface Team {

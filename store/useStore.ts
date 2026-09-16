@@ -57,6 +57,7 @@ interface AppState {
   
   addToHistory: (name: string, gender: Gender) => void;
   removeFromHistory: (name: string) => void;
+  clearHistory: () => void;
   
   setActiveMatches: (matches: (ScheduleItem | null)[]) => void;
   setFullSchedule: (schedule: ScheduleItem[]) => void;
@@ -173,22 +174,56 @@ export const useStore = create<AppState>()(
         };
       }),
 
-      togglePlayerStatus: (id: string) => set((state) => ({
-        players: state.players.map(p => {
-          if (p.id === id) {
-            const currentStatus = p.status || 'ACTIVE';
-            const newStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-            return { 
-              ...p, 
-              status: newStatus,
-              // When coming back from suspension, reset createdAt to now so they don't get forced to "catch up" 
-              // for the matches they missed while suspended.
-              ...(newStatus === 'ACTIVE' ? { createdAt: Date.now() } : {})
-            };
-          }
-          return p;
-        })
-      })),
+      togglePlayerStatus: (id: string) => set((state) => {
+        const pToToggle = state.players.find(p => p.id === id);
+        const currentStatus = pToToggle?.status || 'ACTIVE';
+        const newStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+        
+        if (newStatus === 'ACTIVE') {
+          let totalPlays = 0;
+          let activeCount = 0;
+          
+          const allMatches = [...state.matchHistory, ...state.activeMatches.filter((m): m is ScheduleItem => m !== null)];
+          
+          state.players.forEach(p => {
+             if (p.id !== id && p.status !== 'SUSPENDED') {
+                 const plays = allMatches.filter(m => 
+                     m.teamA.player1.id === p.id || m.teamA.player2.id === p.id ||
+                     m.teamB.player1.id === p.id || m.teamB.player2.id === p.id
+                 ).length;
+                 totalPlays += plays;
+                 activeCount++;
+             }
+          });
+          
+          const avgPlays = activeCount > 0 ? totalPlays / activeCount : 0;
+          
+          const myPlays = allMatches.filter(m => 
+              m.teamA.player1.id === id || m.teamA.player2.id === id ||
+              m.teamB.player1.id === id || m.teamB.player2.id === id
+          ).length;
+          
+          const offset = Math.max(0, Math.floor(avgPlays) - myPlays);
+          
+          return {
+             players: state.players.map(p => {
+               if (p.id === id) {
+                 return { ...p, status: newStatus, missedPlaysOffset: offset };
+               }
+               return p;
+             })
+          };
+        } else {
+          return {
+             players: state.players.map(p => {
+               if (p.id === id) {
+                 return { ...p, status: newStatus };
+               }
+               return p;
+             })
+          };
+        }
+      }),
       
       removePlayer: (id: string) => set((state) => ({
         players: state.players.filter(p => p.id !== id),
@@ -220,6 +255,8 @@ export const useStore = create<AppState>()(
       removeFromHistory: (name: string) => set((state) => ({
         history: state.history.filter(p => p.name !== name)
       })),
+      
+      clearHistory: () => set({ history: [] }),
       
       setActiveMatches: (matches) => set({ activeMatches: matches, fullSchedule: [] }),
       

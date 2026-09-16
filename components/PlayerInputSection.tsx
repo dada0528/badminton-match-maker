@@ -72,6 +72,7 @@ const PlayerInputSection: React.FC = () => {
     clearPlayers, 
     addToHistory,
     removeFromHistory,
+    clearHistory,
     setPlayers,
     setErrorMsg,
     enableSkillLevel,
@@ -218,14 +219,6 @@ const PlayerInputSection: React.FC = () => {
            >
               <Upload size={14} className="shrink-0 sm:w-4 sm:h-4" /> <span>批次匯入</span>
            </motion.button>
-           <motion.button 
-              whileHover={{ scale: 1.05, color: '#ef4444' }}
-              whileTap={{ scale: 0.95 }}
-              onClick={clearPlayers} 
-              className="text-[11px] sm:text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-2.5 py-2 sm:px-3 sm:py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors font-bold whitespace-nowrap shrink-0"
-           >
-              <Trash2 size={14} className="shrink-0 sm:w-4 sm:h-4" /> <span>清空名單</span>
-           </motion.button>
          </div>
       </div>
 
@@ -285,14 +278,24 @@ const PlayerInputSection: React.FC = () => {
             <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
               <History size={14} /> 歷史紀錄球員
             </div>
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleAddAllHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all active:scale-95"
-            >
-              <Users size={14} /> 全部加入
-            </motion.button>
+            <div className="flex items-center gap-2">
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={clearHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-500 rounded-lg text-xs font-bold transition-all active:scale-95"
+              >
+                <Trash2 size={14} /> 清空歷史
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleAddAllHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all active:scale-95"
+              >
+                <Users size={14} /> 全部加入
+              </motion.button>
+            </div>
           </div>
           
           <div className="flex flex-wrap gap-2">
@@ -350,9 +353,18 @@ const PlayerInputSection: React.FC = () => {
               上場名單
             </h3>
             {players.length > 0 && (
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-full">
-                出席 {activeCount} · 請假 {suspendedCount}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-full">
+                  出席 {activeCount} · 請假 {suspendedCount}
+                </span>
+                <button
+                  onClick={clearPlayers}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-full text-xs font-bold transition-all"
+                  title="清空全部上場名單"
+                >
+                  <Trash2 size={12} /> 清空名單
+                </button>
+              </div>
             )}
           </div>
           
