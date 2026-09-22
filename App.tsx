@@ -29,18 +29,14 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Migration from old localStorage format to Zustand persist
+  // Clean up legacy localStorage item to prevent accidental overwrites
   useEffect(() => {
-    const oldHistory = localStorage.getItem('badminton_player_history');
-    if (oldHistory && history.length === 0) {
-      try {
-        const parsed = JSON.parse(oldHistory);
-        useStore.setState({ history: parsed });
-      } catch (e) {
-        console.error("Failed to parse old history", e);
-      }
+    try {
+      localStorage.removeItem('badminton_player_history');
+    } catch {
+      // ignore
     }
-  }, [history.length]);
+  }, []);
 
   return (
     <div className="min-h-screen relative bg-slate-50 dark:bg-slate-950 transition-colors duration-300 font-q overflow-hidden pb-24 sm:pb-20 selection:bg-emerald-200 dark:selection:bg-emerald-900 selection:text-emerald-900 dark:selection:text-emerald-100">

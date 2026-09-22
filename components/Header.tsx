@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Calculator, Moon, Sun, Star, BookOpen, Wallet } from 'lucide-react';
+import { Calculator, Moon, Sun, Star, BookOpen, Wallet, Shield, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import FeeCalculatorModal from './FeeCalculatorModal';
 import PaymentManagerModal from './PaymentManagerModal';
 import InfoModal from './InfoModal';
+import ClubManagerModal from './ClubManagerModal';
 import { useStore } from '../store/useStore';
 
 const BadmintonIcon = () => (
@@ -27,11 +28,14 @@ const BadmintonIcon = () => (
 const Header: React.FC = () => {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [isPaymentManagerOpen, setIsPaymentManagerOpen] = useState(false);
+  const [isClubManagerOpen, setIsClubManagerOpen] = useState(false);
   const [infoModal, setInfoModal] = useState<{ isOpen: boolean; type: 'features' | 'guide' }>({
     isOpen: false,
     type: 'features'
   });
-  const { theme, setTheme } = useStore();
+  const { theme, setTheme, clubs, currentClubId } = useStore();
+
+  const currentClub = clubs.find(c => c.id === currentClubId) || clubs[0];
 
   const openInfo = (type: 'features' | 'guide') => {
     setInfoModal({ isOpen: true, type });
@@ -40,21 +44,20 @@ const Header: React.FC = () => {
   return (
     <>
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-md border-b border-slate-200/50 dark:border-slate-800/50 sticky top-0 z-40 transition-colors duration-300">
-        <div className="max-w-4xl mx-auto px-4 py-3 sm:py-4 flex flex-col gap-4">
+        <div className="max-w-4xl mx-auto px-4 py-3 sm:py-4 flex flex-col gap-3 sm:gap-4">
           
-          {/* Top Row: Logo + Title + Theme Toggle */}
-          <div className="flex items-center justify-between w-full">
+          {/* Top Row: Logo + Title + Current Club Selector + Theme Toggle */}
+          <div className="flex items-center justify-between w-full gap-2">
             <div className="flex items-center gap-3 min-w-0">
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="bg-gradient-to-br from-emerald-400 to-emerald-600 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl shadow-emerald-500/30 dark:shadow-emerald-900/40 shadow-xl shrink-0 flex items-center justify-center relative overflow-hidden"
               >
-                {/* Decorative background lines inside icon */}
                 <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxwYXRoIGQ9Ik0wIDhMODAwWm04IDBMMCAwWiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIwLjUiLz48L3N2Zz4=')]"></div>
                 <BadmintonIcon />
               </motion.div>
-              <div className="flex flex-col">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight italic">
+              <div className="flex flex-col min-w-0">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight italic truncate">
                   菜雞互啄 <span className="text-emerald-500 dark:text-emerald-400">分隊趣</span>
                 </h1>
                 <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-[-2px]">
@@ -62,17 +65,35 @@ const Header: React.FC = () => {
                 </span>
               </div>
             </div>
-            
-            {/* Universal Theme Toggle */}
-            <motion.button
-              whileHover={{ rotate: 15 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="p-2 sm:p-2.5 rounded-full text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all border border-transparent"
-              title={theme === 'dark' ? '切換為淺色模式' : '切換為深色模式'}
-            >
-              {theme === 'dark' ? <Sun size={18} className="sm:w-5 sm:h-5" /> : <Moon size={18} className="sm:w-5 sm:h-5" />}
-            </motion.button>
+
+            {/* Right side: Club Pill + Theme Toggle */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Active Club Switcher Pill */}
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setIsClubManagerOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 shadow-sm transition-all"
+                title="點擊切換或管理球團"
+              >
+                <Shield size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="max-w-[85px] sm:max-w-[120px] truncate">
+                  {currentClub?.name || '預設球團'}
+                </span>
+                <ChevronDown size={13} className="text-emerald-500 shrink-0 opacity-80" />
+              </motion.button>
+              
+              {/* Universal Theme Toggle */}
+              <motion.button
+                whileHover={{ rotate: 15 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-2 sm:p-2.5 rounded-full text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-slate-700 transition-all border border-transparent shrink-0"
+                title={theme === 'dark' ? '切換為淺色模式' : '切換為深色模式'}
+              >
+                {theme === 'dark' ? <Sun size={18} className="sm:w-5 sm:h-5" /> : <Moon size={18} className="sm:w-5 sm:h-5" />}
+              </motion.button>
+            </div>
           </div>
 
           {/* Bottom Row: Action Buttons Section */}
@@ -128,6 +149,7 @@ const Header: React.FC = () => {
       </header>
       <FeeCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
       <PaymentManagerModal isOpen={isPaymentManagerOpen} onClose={() => setIsPaymentManagerOpen(false)} />
+      <ClubManagerModal isOpen={isClubManagerOpen} onClose={() => setIsClubManagerOpen(false)} />
       <InfoModal 
         isOpen={infoModal.isOpen} 
         type={infoModal.type} 

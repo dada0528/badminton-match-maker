@@ -1,11 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Player, Gender, Match, ScheduleItem, MatchType, SkillMode } from '../types';
-
-interface HistoryPlayer {
-  name: string;
-  gender: Gender;
-}
+import { Player, Gender, Match, ScheduleItem, MatchType, SkillMode, Club, HistoryPlayer } from '../types';
 
 interface PaymentInfo {
   amount: string;
@@ -14,6 +9,10 @@ interface PaymentInfo {
 }
 
 interface AppState {
+  // Club Management
+  clubs: Club[];
+  currentClubId: string;
+
   // Data
   players: Player[];
   history: HistoryPlayer[];
@@ -43,6 +42,12 @@ interface AppState {
   // Payment State
   paymentInfo: PaymentInfo;
   paidPlayerIds: string[];
+
+  // Club Actions
+  addClub: (name: string, copyFromClubId?: string) => void;
+  renameClub: (id: string, name: string) => void;
+  deleteClub: (id: string) => void;
+  switchClub: (id: string) => void;
 
   // Actions
   setPlayers: (players: Player[] | ((prev: Player[]) => Player[])) => void;
@@ -84,9 +89,30 @@ interface AppState {
   clearAllPayments: () => void;
 }
 
+const defaultInitialClub: Club = {
+  id: 'default',
+  name: '預設球團',
+  history: [],
+  players: [],
+  activeMatches: [],
+  matchHistory: [],
+  fullSchedule: [],
+  courtCount: 1,
+  courtNames: ['1'],
+  rounds: 2,
+  paidPlayerIds: [],
+  fixedPairs: [],
+  firstMatchPlayerIds: [],
+  createdAt: Date.now(),
+};
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
+      // Club State
+      clubs: [defaultInitialClub],
+      currentClubId: 'default',
+
       // Initial State
       players: [],
       history: [],
@@ -112,14 +138,172 @@ export const useStore = create<AppState>()(
       paymentInfo: { amount: '', account: '', qrCode: null },
       paidPlayerIds: [],
 
+      // Club Actions
+      addClub: (name: string, copyFromClubId?: string) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+
+        set((state) => {
+          // Snapshot current club state before creating new one
+          const updatedClubs = state.clubs.map((c) => {
+            if (c.id === state.currentClubId) {
+              return {
+                ...c,
+                history: state.history,
+                players: state.players,
+                activeMatches: state.activeMatches,
+                matchHistory: state.matchHistory,
+                fullSchedule: state.fullSchedule,
+                courtCount: state.courtCount,
+                courtNames: state.courtNames,
+                rounds: state.rounds,
+                paidPlayerIds: state.paidPlayerIds,
+                fixedPairs: state.fixedPairs,
+                firstMatchPlayerIds: state.firstMatchPlayerIds,
+              };
+            }
+            return c;
+          });
+
+          let initialHistory: HistoryPlayer[] = [];
+          if (copyFromClubId) {
+            const source = updatedClubs.find((c) => c.id === copyFromClubId);
+            if (source?.history) {
+              initialHistory = [...source.history];
+            }
+          }
+
+          const newClubId = 'club_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+          const newClub: Club = {
+            id: newClubId,
+            name: trimmedName,
+            history: initialHistory,
+            players: [],
+            activeMatches: [],
+            matchHistory: [],
+            fullSchedule: [],
+            courtCount: state.courtCount,
+            courtNames: state.courtNames,
+            rounds: state.rounds,
+            paidPlayerIds: [],
+            fixedPairs: [],
+            firstMatchPlayerIds: [],
+            createdAt: Date.now(),
+          };
+
+          return {
+            clubs: [...updatedClubs, newClub],
+            currentClubId: newClubId,
+            history: initialHistory,
+            players: [],
+            activeMatches: [],
+            matchHistory: [],
+            fullSchedule: [],
+            paidPlayerIds: [],
+            fixedPairs: [],
+            firstMatchPlayerIds: [],
+          };
+        });
+      },
+
+      renameClub: (id: string, name: string) => {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+        set((state) => ({
+          clubs: state.clubs.map((c) => (c.id === id ? { ...c, name: trimmedName } : c)),
+        }));
+      },
+
+      deleteClub: (id: string) => {
+        const { clubs, currentClubId, setErrorMsg } = get();
+        if (clubs.length <= 1) {
+          setErrorMsg('至少需要保留一個球團！');
+          setTimeout(() => get().setErrorMsg(null), 2000);
+          return;
+        }
+
+        set((state) => {
+          const remainingClubs = state.clubs.filter((c) => c.id !== id);
+          if (state.currentClubId === id) {
+            const nextClub = remainingClubs[0];
+            return {
+              clubs: remainingClubs,
+              currentClubId: nextClub.id,
+              history: nextClub.history || [],
+              players: nextClub.players || [],
+              activeMatches: nextClub.activeMatches || [],
+              matchHistory: nextClub.matchHistory || [],
+              fullSchedule: nextClub.fullSchedule || [],
+              courtCount: nextClub.courtCount ?? state.courtCount,
+              courtNames: nextClub.courtNames ?? state.courtNames,
+              rounds: nextClub.rounds ?? state.rounds,
+              paidPlayerIds: nextClub.paidPlayerIds || [],
+              fixedPairs: nextClub.fixedPairs || [],
+              firstMatchPlayerIds: nextClub.firstMatchPlayerIds || [],
+            };
+          }
+          return { clubs: remainingClubs };
+        });
+      },
+
+      switchClub: (clubId: string) => {
+        set((state) => {
+          if (clubId === state.currentClubId) return state;
+          const targetClub = state.clubs.find((c) => c.id === clubId);
+          if (!targetClub) return state;
+
+          // Snapshot current club data
+          const updatedClubs = state.clubs.map((c) => {
+            if (c.id === state.currentClubId) {
+              return {
+                ...c,
+                history: state.history,
+                players: state.players,
+                activeMatches: state.activeMatches,
+                matchHistory: state.matchHistory,
+                fullSchedule: state.fullSchedule,
+                courtCount: state.courtCount,
+                courtNames: state.courtNames,
+                rounds: state.rounds,
+                paidPlayerIds: state.paidPlayerIds,
+                fixedPairs: state.fixedPairs,
+                firstMatchPlayerIds: state.firstMatchPlayerIds,
+              };
+            }
+            return c;
+          });
+
+          // Load target club data
+          const next = updatedClubs.find((c) => c.id === clubId)!;
+          return {
+            clubs: updatedClubs,
+            currentClubId: clubId,
+            history: next.history || [],
+            players: next.players || [],
+            activeMatches: next.activeMatches || [],
+            matchHistory: next.matchHistory || [],
+            fullSchedule: next.fullSchedule || [],
+            courtCount: next.courtCount ?? state.courtCount,
+            courtNames: next.courtNames ?? state.courtNames,
+            rounds: next.rounds ?? state.rounds,
+            paidPlayerIds: next.paidPlayerIds || [],
+            fixedPairs: next.fixedPairs || [],
+            firstMatchPlayerIds: next.firstMatchPlayerIds || [],
+          };
+        });
+      },
+
       // Actions
       setPlayers: (updater) => set((state) => {
         const newPlayers = typeof updater === 'function' ? updater(state.players) : updater;
         const newPlayerIds = new Set(newPlayers.map(p => p.id));
+        const newFirstMatch = state.firstMatchPlayerIds.filter(id => newPlayerIds.has(id));
+        const newFixedPairs = state.fixedPairs.filter(pair => newPlayerIds.has(pair[0]) && newPlayerIds.has(pair[1]));
         return {
           players: newPlayers,
-          firstMatchPlayerIds: state.firstMatchPlayerIds.filter(id => newPlayerIds.has(id)),
-          fixedPairs: state.fixedPairs.filter(pair => newPlayerIds.has(pair[0]) && newPlayerIds.has(pair[1]))
+          firstMatchPlayerIds: newFirstMatch,
+          fixedPairs: newFixedPairs,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: newPlayers, firstMatchPlayerIds: newFirstMatch, fixedPairs: newFixedPairs } : c)
         };
       }),
       
@@ -144,7 +328,11 @@ export const useStore = create<AppState>()(
           status: 'ACTIVE',
         };
 
-        set({ players: [...players, newPlayer] });
+        const newPlayers = [...players, newPlayer];
+        set((state) => ({
+          players: newPlayers,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: newPlayers } : c)
+        }));
         addToHistory(trimmedName, gender);
       },
       
@@ -167,10 +355,15 @@ export const useStore = create<AppState>()(
           };
         };
 
+        const newPlayers = state.players.map((p) => (p.id === id ? { ...p, level: newLevel } : p));
+        const newActiveMatches = state.activeMatches.map(updateScheduleItem);
+        const newFullSchedule = state.fullSchedule.map((m) => updateScheduleItem(m) as ScheduleItem);
+
         return {
-          players: state.players.map((p) => (p.id === id ? { ...p, level: newLevel } : p)),
-          activeMatches: state.activeMatches.map(updateScheduleItem),
-          fullSchedule: state.fullSchedule.map((m) => updateScheduleItem(m) as ScheduleItem),
+          players: newPlayers,
+          activeMatches: newActiveMatches,
+          fullSchedule: newFullSchedule,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: newPlayers, activeMatches: newActiveMatches, fullSchedule: newFullSchedule } : c)
         };
       }),
 
@@ -205,79 +398,122 @@ export const useStore = create<AppState>()(
           
           const offset = Math.max(0, Math.floor(avgPlays) - myPlays);
           
+          const updatedPlayers = state.players.map(p => {
+            if (p.id === id) {
+              return { ...p, status: newStatus, missedPlaysOffset: offset };
+            }
+            return p;
+          });
+
           return {
-             players: state.players.map(p => {
-               if (p.id === id) {
-                 return { ...p, status: newStatus, missedPlaysOffset: offset };
-               }
-               return p;
-             })
+             players: updatedPlayers,
+             clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: updatedPlayers } : c)
           };
         } else {
+          const updatedPlayers = state.players.map(p => {
+            if (p.id === id) {
+              return { ...p, status: newStatus };
+            }
+            return p;
+          });
+
           return {
-             players: state.players.map(p => {
-               if (p.id === id) {
-                 return { ...p, status: newStatus };
-               }
-               return p;
-             })
+             players: updatedPlayers,
+             clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: updatedPlayers } : c)
           };
         }
       }),
       
-      removePlayer: (id: string) => set((state) => ({
-        players: state.players.filter(p => p.id !== id),
-        firstMatchPlayerIds: state.firstMatchPlayerIds.filter(pid => pid !== id),
-        fixedPairs: state.fixedPairs.filter(pair => pair[0] !== id && pair[1] !== id)
+      removePlayer: (id: string) => set((state) => {
+        const newPlayers = state.players.filter(p => p.id !== id);
+        const newFirstMatch = state.firstMatchPlayerIds.filter(pid => pid !== id);
+        const newFixedPairs = state.fixedPairs.filter(pair => pair[0] !== id && pair[1] !== id);
+        return {
+          players: newPlayers,
+          firstMatchPlayerIds: newFirstMatch,
+          fixedPairs: newFixedPairs,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: newPlayers, firstMatchPlayerIds: newFirstMatch, fixedPairs: newFixedPairs } : c)
+        };
+      }),
+      
+      clearPlayers: () => set((state) => ({
+        players: [],
+        firstMatchPlayerIds: [],
+        fixedPairs: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, players: [], firstMatchPlayerIds: [], fixedPairs: [] } : c)
       })),
       
-      clearPlayers: () => set({ players: [], firstMatchPlayerIds: [], fixedPairs: [] }),
-      
       addFixedPair: (p1Id: string, p2Id: string) => set((state) => {
-        // Remove any existing pairs involving these players
         const filteredPairs = state.fixedPairs.filter(pair => 
           pair[0] !== p1Id && pair[1] !== p1Id && pair[0] !== p2Id && pair[1] !== p2Id
         );
-        return { fixedPairs: [...filteredPairs, [p1Id, p2Id]] };
+        const newFixedPairs = [...filteredPairs, [p1Id, p2Id]];
+        return {
+          fixedPairs: newFixedPairs,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, fixedPairs: newFixedPairs } : c)
+        };
       }),
       
-      removeFixedPair: (p1Id: string, p2Id: string) => set((state) => ({
-        fixedPairs: state.fixedPairs.filter(pair => 
+      removeFixedPair: (p1Id: string, p2Id: string) => set((state) => {
+        const newFixedPairs = state.fixedPairs.filter(pair => 
           !(pair[0] === p1Id && pair[1] === p2Id) && !(pair[0] === p2Id && pair[1] === p1Id)
-        )
-      })),
+        );
+        return {
+          fixedPairs: newFixedPairs,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, fixedPairs: newFixedPairs } : c)
+        };
+      }),
       
       addToHistory: (name: string, gender: Gender) => set((state) => {
         if (state.history.some(p => p.name === name)) return state;
-        return { history: [...state.history, { name, gender }] };
+        const newHistory = [...state.history, { name, gender }];
+        return {
+          history: newHistory,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, history: newHistory } : c)
+        };
       }),
       
-      removeFromHistory: (name: string) => set((state) => ({
-        history: state.history.filter(p => p.name !== name)
+      removeFromHistory: (name: string) => set((state) => {
+        const newHistory = state.history.filter(p => p.name !== name);
+        return {
+          history: newHistory,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, history: newHistory } : c)
+        };
+      }),
+      
+      clearHistory: () => set((state) => ({
+        history: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, history: [] } : c)
       })),
       
-      clearHistory: () => set({ history: [] }),
+      setActiveMatches: (matches) => set((state) => ({
+        activeMatches: matches,
+        fullSchedule: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, activeMatches: matches, fullSchedule: [] } : c)
+      })),
       
-      setActiveMatches: (matches) => set({ activeMatches: matches, fullSchedule: [] }),
-      
-      setFullSchedule: (schedule) => set({ fullSchedule: schedule, activeMatches: [] }),
+      setFullSchedule: (schedule) => set((state) => ({
+        fullSchedule: schedule,
+        activeMatches: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, fullSchedule: schedule, activeMatches: [] } : c)
+      })),
       
       endMatch: (courtIndex, nextMatch) => set((state) => {
         const currentMatch = state.activeMatches[courtIndex];
         const newActiveMatches = [...state.activeMatches];
         newActiveMatches[courtIndex] = nextMatch;
+        const newMatchHistory = currentMatch ? [...state.matchHistory, currentMatch] : state.matchHistory;
         
         return {
           activeMatches: newActiveMatches,
-          matchHistory: currentMatch ? [...state.matchHistory, currentMatch] : state.matchHistory
+          matchHistory: newMatchHistory,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, activeMatches: newActiveMatches, matchHistory: newMatchHistory } : c)
         };
       }),
 
       undoMatch: (courtIndex: number) => set((state) => {
         const history = [...state.matchHistory];
         let lastMatchIndex = -1;
-        // Find the last match for this court
-        // court in ScheduleItem is 1-indexed, courtIndex is 0-indexed
         for (let i = history.length - 1; i >= 0; i--) {
           if (history[i].court === courtIndex + 1) {
             lastMatchIndex = i;
@@ -285,7 +521,7 @@ export const useStore = create<AppState>()(
           }
         }
 
-        if (lastMatchIndex === -1) return state; // No history for this court
+        if (lastMatchIndex === -1) return state;
 
         const lastMatch = history[lastMatchIndex];
         history.splice(lastMatchIndex, 1);
@@ -295,13 +531,22 @@ export const useStore = create<AppState>()(
 
         return {
           matchHistory: history,
-          activeMatches: newActiveMatches
+          activeMatches: newActiveMatches,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, activeMatches: newActiveMatches, matchHistory: history } : c)
         };
       }),
 
-      clearMatchHistory: () => set({ matchHistory: [], activeMatches: [], fullSchedule: [] }),
+      clearMatchHistory: () => set((state) => ({
+        matchHistory: [],
+        activeMatches: [],
+        fullSchedule: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, matchHistory: [], activeMatches: [], fullSchedule: [] } : c)
+      })),
       
-      setRounds: (rounds) => set({ rounds }),
+      setRounds: (rounds) => set((state) => ({
+        rounds,
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, rounds } : c)
+      })),
       setCourtCount: (num) => set((state) => {
         // Adjust activeMatches array length
         let newActiveMatches = [...state.activeMatches];
@@ -321,12 +566,20 @@ export const useStore = create<AppState>()(
           newCourtNames = newCourtNames.slice(0, num);
         }
 
-        return { courtCount: num, activeMatches: newActiveMatches, courtNames: newCourtNames };
+        return {
+          courtCount: num,
+          activeMatches: newActiveMatches,
+          courtNames: newCourtNames,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, courtCount: num, activeMatches: newActiveMatches, courtNames: newCourtNames } : c)
+        };
       }),
       setCourtName: (index, name) => set((state) => {
         const newCourtNames = [...state.courtNames];
         newCourtNames[index] = name;
-        return { courtNames: newCourtNames };
+        return {
+          courtNames: newCourtNames,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, courtNames: newCourtNames } : c)
+        };
       }),
       setScheduleType: (scheduleType) => set({ scheduleType }),
       setMixPartners: (mixPartners) => set({ mixPartners }),
@@ -334,7 +587,10 @@ export const useStore = create<AppState>()(
       setEnableSkillLevel: (enableSkillLevel) => set({ enableSkillLevel }),
       setSkillMode: (skillMode) => set({ skillMode }),
       setAutoVoiceEnabled: (autoVoiceEnabled) => set({ autoVoiceEnabled }),
-      setFirstMatchPlayerIds: (firstMatchPlayerIds) => set({ firstMatchPlayerIds }),
+      setFirstMatchPlayerIds: (firstMatchPlayerIds) => set((state) => ({
+        firstMatchPlayerIds,
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, firstMatchPlayerIds } : c)
+      })),
       setTheme: (theme) => {
         if (theme === 'dark') {
           document.documentElement.classList.add('dark');
@@ -349,17 +605,25 @@ export const useStore = create<AppState>()(
       setIsFullscreen: (isFullscreen) => set({ isFullscreen }),
 
       setPaymentInfo: (paymentInfo) => set({ paymentInfo }),
-      togglePlayerPaid: (playerId) => set((state) => ({
-        paidPlayerIds: state.paidPlayerIds.includes(playerId)
+      togglePlayerPaid: (playerId) => set((state) => {
+        const newPaidPlayerIds = state.paidPlayerIds.includes(playerId)
           ? state.paidPlayerIds.filter(id => id !== playerId)
-          : [...state.paidPlayerIds, playerId]
+          : [...state.paidPlayerIds, playerId];
+        return {
+          paidPlayerIds: newPaidPlayerIds,
+          clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, paidPlayerIds: newPaidPlayerIds } : c)
+        };
+      }),
+      clearAllPayments: () => set((state) => ({
+        paidPlayerIds: [],
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, paidPlayerIds: [] } : c)
       })),
-      clearAllPayments: () => set({ paidPlayerIds: [] }),
     }),
     {
       name: 'badminton-app-storage',
-      // Only persist these fields
       partialize: (state) => ({
+        clubs: state.clubs,
+        currentClubId: state.currentClubId,
         players: state.players,
         history: state.history,
         activeMatches: state.activeMatches,
@@ -379,6 +643,47 @@ export const useStore = create<AppState>()(
         paymentInfo: state.paymentInfo,
         paidPlayerIds: state.paidPlayerIds,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (!state.clubs || state.clubs.length === 0) {
+          const defaultClub: Club = {
+            id: 'default',
+            name: '預設球團',
+            history: state.history || [],
+            players: state.players || [],
+            activeMatches: state.activeMatches || [],
+            matchHistory: state.matchHistory || [],
+            fullSchedule: state.fullSchedule || [],
+            courtCount: state.courtCount || 1,
+            courtNames: state.courtNames || ['1'],
+            rounds: state.rounds || 2,
+            paidPlayerIds: state.paidPlayerIds || [],
+            fixedPairs: state.fixedPairs || [],
+            firstMatchPlayerIds: state.firstMatchPlayerIds || [],
+            createdAt: Date.now(),
+          };
+          state.clubs = [defaultClub];
+          state.currentClubId = 'default';
+        } else {
+          if (!state.currentClubId || !state.clubs.some((c) => c.id === state.currentClubId)) {
+            state.currentClubId = state.clubs[0].id;
+          }
+          const curr = state.clubs.find((c) => c.id === state.currentClubId);
+          if (curr) {
+            state.history = curr.history || [];
+            state.players = curr.players || [];
+            state.activeMatches = curr.activeMatches || [];
+            state.matchHistory = curr.matchHistory || [];
+            state.fullSchedule = curr.fullSchedule || [];
+            if (curr.courtCount) state.courtCount = curr.courtCount;
+            if (curr.courtNames) state.courtNames = curr.courtNames;
+            if (curr.rounds) state.rounds = curr.rounds;
+            if (curr.paidPlayerIds) state.paidPlayerIds = curr.paidPlayerIds;
+            if (curr.fixedPairs) state.fixedPairs = curr.fixedPairs;
+            if (curr.firstMatchPlayerIds) state.firstMatchPlayerIds = curr.firstMatchPlayerIds;
+          }
+        }
+      },
     }
   )
 );

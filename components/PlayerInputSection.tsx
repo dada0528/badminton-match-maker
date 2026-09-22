@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X, Search, Filter, UserCheck, UserX, RotateCcw } from 'lucide-react';
+import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X, Search, Filter, UserCheck, UserX, RotateCcw, Shield, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, Gender } from '../types';
 import PlayerCard from './PlayerCard';
 import ImportModal from './ImportModal';
 import { ShareGroupModal } from './ShareGroupModal';
+import ClubManagerModal from './ClubManagerModal';
 import { useStore } from '../store/useStore';
 
 const PlayerListItem: React.FC<{ 
@@ -77,13 +78,19 @@ const PlayerInputSection: React.FC = () => {
     setErrorMsg,
     enableSkillLevel,
     setEnableSkillLevel,
-    updatePlayerLevel
+    updatePlayerLevel,
+    clubs,
+    currentClubId,
+    switchClub
   } = useStore();
 
   const [newName, setNewName] = useState('');
   const [newGender, setNewGender] = useState<Gender>(Gender.MALE);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isClubManagerOpen, setIsClubManagerOpen] = useState(false);
+
+  const currentClub = clubs.find(c => c.id === currentClubId) || clubs[0];
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,6 +229,65 @@ const PlayerInputSection: React.FC = () => {
          </div>
       </div>
 
+      {/* Club Switcher & Management Bar */}
+      <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-slate-100/50 dark:from-emerald-950/40 dark:via-slate-800/60 dark:to-slate-900/40 rounded-2xl p-3 sm:p-4 border border-emerald-200/80 dark:border-emerald-800/60 mb-6 relative z-10 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Left: Club Selector Pills */}
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider shrink-0">
+              <Shield size={16} className="text-emerald-600 dark:text-emerald-400" />
+              <span>球團：</span>
+            </div>
+            
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {clubs.map((c) => {
+                const isCurrent = c.id === currentClubId;
+                const count = isCurrent ? history.length : (c.history?.length || 0);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => !isCurrent && switchClub(c.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      isCurrent
+                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    <span>{c.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                      isCurrent ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {count}人
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Quick Club Actions */}
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setIsClubManagerOpen(true)}
+              className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-all shadow-sm"
+            >
+              <Settings size={13} className="text-slate-500" />
+              <span>管理球團</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsClubManagerOpen(true)}
+              className="text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm shadow-emerald-500/20"
+            >
+              <Plus size={14} />
+              <span>新增球團</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Add Player Form */}
       <form onSubmit={handleAddPlayer} className="flex flex-col sm:flex-row gap-3 mb-8 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner relative z-10">
         <div className="flex-1 relative">
@@ -274,9 +340,13 @@ const PlayerInputSection: React.FC = () => {
       {/* History Quick Add */}
       {history.length > 0 && (
         <div className="mb-8 relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-              <History size={14} /> 歷史紀錄球員
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex-wrap">
+              <History size={14} className="text-emerald-500 shrink-0" />
+              <span>【{currentClub?.name || '當前球團'}】歷史紀錄球員 ({history.length})</span>
+              <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500 hidden md:inline">
+                *各球團名單完全獨立，刪除不影響其他球團
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <motion.button 
@@ -606,6 +676,11 @@ const PlayerInputSection: React.FC = () => {
       <ShareGroupModal 
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
+      />
+
+      <ClubManagerModal
+        isOpen={isClubManagerOpen}
+        onClose={() => setIsClubManagerOpen(false)}
       />
     </section>
   );

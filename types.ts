@@ -7,6 +7,28 @@ export type PlayerStatus = 'ACTIVE' | 'SUSPENDED';
 
 export type SkillMode = 'BALANCED' | 'STRONG_WEAK';
 
+export interface HistoryPlayer {
+  name: string;
+  gender: Gender;
+}
+
+export interface Club {
+  id: string;
+  name: string;
+  history: HistoryPlayer[];
+  players?: Player[];
+  activeMatches?: (ScheduleItem | null)[];
+  matchHistory?: ScheduleItem[];
+  fullSchedule?: ScheduleItem[];
+  courtCount?: number;
+  courtNames?: string[];
+  rounds?: number;
+  paidPlayerIds?: string[];
+  fixedPairs?: Array<[string, string]>;
+  firstMatchPlayerIds?: string[];
+  createdAt?: number;
+}
+
 export interface Player {
   id: string;
   name: string;
