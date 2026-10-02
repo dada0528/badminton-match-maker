@@ -1,25 +1,51 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus } from 'lucide-react';
+import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
 import PlayerCard from './PlayerCard';
+import EditPlayerModal from './EditPlayerModal';
 import html2canvas from 'html2canvas';
 import { generateNextMatch, suggestWaitList } from '../services/matchService';
 
-const CourtPlayerBadge = ({ player, onClick }: { player: Player; onClick?: () => void }) => (
+const CourtPlayerBadge = ({ 
+  player, 
+  onClick, 
+  onEdit 
+}: { 
+  player: Player; 
+  onClick?: () => void; 
+  onEdit?: () => void;
+}) => (
   <motion.div 
     whileHover={onClick ? { scale: 1.05 } : {}}
     whileTap={onClick ? { scale: 0.95 } : {}}
     onClick={onClick}
+    title={onClick ? "點擊更換選手 / 管理" : undefined}
     className={`flex items-center justify-center min-w-[3.8rem] px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black shadow-xl border-2 overflow-hidden backdrop-blur-md ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-emerald-300 transition-all' : ''} ${
     player.gender === Gender.MALE 
       ? 'bg-blue-500/90 border-blue-200/50 text-white dark:bg-blue-600/90' 
       : 'bg-pink-500/90 border-pink-200/50 text-white dark:bg-pink-600/90'
   }`}>
-    <span className="whitespace-nowrap tracking-wide" style={{ lineHeight: '1.2' }}>
+    <span 
+      className="whitespace-nowrap tracking-wide select-none"
+      style={{ lineHeight: '1.2' }}
+    >
       {player.name}
     </span>
+    {onEdit && (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+        title="修改姓名與性別"
+        className="w-4 h-4 flex items-center justify-center ml-1 text-white/80 hover:text-white rounded-full bg-white/20 hover:bg-white/35 transition-all active:scale-90 shrink-0"
+      >
+        <Pencil size={9} strokeWidth={2.5} />
+      </button>
+    )}
   </motion.div>
 );
 
@@ -79,6 +105,7 @@ const MatchResults: React.FC = () => {
 
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [isLandscape, setIsLandscape] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [swappingPlayer, setSwappingPlayer] = useState<{
     matchIdx: number;
     team: 'teamA' | 'teamB';
@@ -279,9 +306,22 @@ const MatchResults: React.FC = () => {
                className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                   換人: <PlayerCard player={storePlayer} size="sm" className="pointer-events-none" />
-                </h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                     換人: <PlayerCard player={storePlayer} size="sm" className="pointer-events-none" />
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setEditingPlayer(storePlayer);
+                      setSwappingPlayer(null);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-xs font-bold border border-emerald-200 dark:border-emerald-800 transition-colors"
+                    title="修改姓名與性別"
+                  >
+                    <Pencil size={12} strokeWidth={2.5} />
+                    修改姓名/性別
+                  </button>
+                </div>
                 <button onClick={() => setSwappingPlayer(null)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition">
                   <X size={20} />
                 </button>
@@ -517,17 +557,17 @@ const MatchResults: React.FC = () => {
                              <>
                                {/* Team A */}
                                <div className="absolute top-1/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20">
-                                 <CourtPlayerBadge player={match.teamA.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player1', player: match.teamA.player1 })} />
+                                 <CourtPlayerBadge player={match.teamA.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player1', player: match.teamA.player1 })} onEdit={() => setEditingPlayer(match.teamA.player1)} />
                                </div>
                                <div className="absolute top-3/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20">
-                                 <CourtPlayerBadge player={match.teamA.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player2', player: match.teamA.player2 })} />
+                                 <CourtPlayerBadge player={match.teamA.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player2', player: match.teamA.player2 })} onEdit={() => setEditingPlayer(match.teamA.player2)} />
                                </div>
                                {/* Team B */}
                                <div className="absolute top-1/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20">
-                                 <CourtPlayerBadge player={match.teamB.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player1', player: match.teamB.player1 })} />
+                                 <CourtPlayerBadge player={match.teamB.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player1', player: match.teamB.player1 })} onEdit={() => setEditingPlayer(match.teamB.player1)} />
                                </div>
                                <div className="absolute top-3/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20">
-                                 <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} />
+                                 <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} onEdit={() => setEditingPlayer(match.teamB.player2)} />
                                </div>
                                
                              </>
@@ -585,6 +625,7 @@ const MatchResults: React.FC = () => {
                               player={p.player} 
                               restCount={p.restCount}
                               onStatusToggle={togglePlayerStatus}
+                              onEdit={(p) => setEditingPlayer(p)}
                             />
                           ))}
                         </div>
@@ -602,8 +643,11 @@ const MatchResults: React.FC = () => {
                              if (scheduleType === MatchType.WOMENS_DOUBLES) return p.gender === Gender.FEMALE;
                              return true;
                          }).map(p => (
-                           <div key={p.id} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-700 p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-600">
-                              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{p.name}</span>
+                           <div key={p.id} onClick={() => setEditingPlayer(p)} title="點擊修改姓名與性別" className="flex items-center justify-between gap-2 bg-white dark:bg-slate-700 p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-600 cursor-pointer hover:border-emerald-300 dark:hover:border-emerald-500 transition-all group">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">{p.name}</span>
+                                <Pencil size={11} className="opacity-0 group-hover:opacity-100 text-slate-400 shrink-0" />
+                              </div>
                               <span className={`shrink-0 text-xs font-black min-w-6 text-center py-0.5 rounded-md ${getPlayerMatchCount(p.id) === 0 ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400'}`}>
                                  {getPlayerMatchCount(p.id)}
                               </span>
@@ -739,16 +783,16 @@ const MatchResults: React.FC = () => {
                       {match ? (
                         <>
                           <div className={`absolute top-1/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
-                            <CourtPlayerBadge player={match.teamA.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player1', player: match.teamA.player1 })} />
+                            <CourtPlayerBadge player={match.teamA.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player1', player: match.teamA.player1 })} onEdit={() => setEditingPlayer(match.teamA.player1)} />
                           </div>
                           <div className={`absolute top-3/4 left-[22%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
-                            <CourtPlayerBadge player={match.teamA.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player2', player: match.teamA.player2 })} />
+                            <CourtPlayerBadge player={match.teamA.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamA', playerKey: 'player2', player: match.teamA.player2 })} onEdit={() => setEditingPlayer(match.teamA.player2)} />
                           </div>
                           <div className={`absolute top-1/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
-                            <CourtPlayerBadge player={match.teamB.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player1', player: match.teamB.player1 })} />
+                            <CourtPlayerBadge player={match.teamB.player1} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player1', player: match.teamB.player1 })} onEdit={() => setEditingPlayer(match.teamB.player1)} />
                           </div>
                           <div className={`absolute top-3/4 left-[78%] -translate-x-1/2 -translate-y-1/2 z-20 ${isLandscape ? getBadgeScaleClass(displayMatches.length) : 'scale-125'}`}>
-                            <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} />
+                            <CourtPlayerBadge player={match.teamB.player2} onClick={() => setSwappingPlayer({ matchIdx: idx, team: 'teamB', playerKey: 'player2', player: match.teamB.player2 })} onEdit={() => setEditingPlayer(match.teamB.player2)} />
                           </div>
                           
                         </>
@@ -805,6 +849,7 @@ const MatchResults: React.FC = () => {
                       player={p.player} 
                       restCount={p.restCount}
                       onStatusToggle={togglePlayerStatus}
+                      onEdit={(p) => setEditingPlayer(p)}
                       size="lg"
                       className="border-slate-700 bg-slate-800 text-slate-200"
                     />
@@ -817,6 +862,11 @@ const MatchResults: React.FC = () => {
       )}
       </AnimatePresence>
       {renderSwapModal()}
+      <EditPlayerModal
+        isOpen={!!editingPlayer}
+        player={editingPlayer}
+        onClose={() => setEditingPlayer(null)}
+      />
     </div>
   );
 };

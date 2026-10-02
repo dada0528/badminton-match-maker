@@ -52,6 +52,7 @@ interface AppState {
   // Actions
   setPlayers: (players: Player[] | ((prev: Player[]) => Player[])) => void;
   addPlayer: (name: string, gender: Gender) => void;
+  updatePlayer: (id: string, name: string, gender: Gender) => boolean;
   updatePlayerLevel: (id: string, level: number) => void;
   togglePlayerStatus: (id: string) => void;
   removePlayer: (id: string) => void;
@@ -61,6 +62,7 @@ interface AppState {
   removeFixedPair: (p1Id: string, p2Id: string) => void;
   
   addToHistory: (name: string, gender: Gender) => void;
+  updateHistoryPlayer: (oldName: string, newName: string, newGender: Gender) => boolean;
   removeFromHistory: (name: string) => void;
   clearHistory: () => void;
   
@@ -336,6 +338,96 @@ export const useStore = create<AppState>()(
         addToHistory(trimmedName, gender);
       },
       
+      updatePlayer: (id: string, name: string, gender: Gender) => {
+        const { players, history, clubs, currentClubId, setErrorMsg } = get();
+        const trimmedName = name.trim();
+        if (!trimmedName) {
+          setErrorMsg('選手姓名不可為空白！');
+          setTimeout(() => get().setErrorMsg(null), 2500);
+          return false;
+        }
+
+        const existingPlayer = players.find(p => p.id === id);
+        if (!existingPlayer) return false;
+
+        const isDuplicate = players.some(p => p.id !== id && p.name.trim().toLowerCase() === trimmedName.toLowerCase());
+        if (isDuplicate) {
+          setErrorMsg(`「${trimmedName}」已經存在於球員名單中！`);
+          setTimeout(() => get().setErrorMsg(null), 2500);
+          return false;
+        }
+
+        const oldName = existingPlayer.name;
+
+        // 1. Update players array
+        const updatedPlayers = players.map(p => 
+          p.id === id ? { ...p, name: trimmedName, gender } : p
+        );
+
+        // 2. Update history
+        let updatedHistory = [...history];
+        const oldHistoryIndex = updatedHistory.findIndex(h => h.name === oldName);
+        if (oldHistoryIndex !== -1) {
+          updatedHistory = updatedHistory.filter((h, idx) => idx === oldHistoryIndex || h.name !== trimmedName);
+          updatedHistory[oldHistoryIndex] = { name: trimmedName, gender };
+        } else {
+          const existingNewIndex = updatedHistory.findIndex(h => h.name === trimmedName);
+          if (existingNewIndex !== -1) {
+            updatedHistory[existingNewIndex] = { name: trimmedName, gender };
+          } else {
+            updatedHistory.push({ name: trimmedName, gender });
+          }
+        }
+
+        // 3. Update activeMatches, matchHistory, fullSchedule
+        const updatePlayerObj = <T extends Player>(p: T): T => {
+          return p.id === id ? { ...p, name: trimmedName, gender } : p;
+        };
+        const updateTeam = (team: { player1: Player; player2: Player }) => ({
+          player1: updatePlayerObj(team.player1),
+          player2: updatePlayerObj(team.player2),
+        });
+        const updateScheduleItem = (item: ScheduleItem | null): ScheduleItem | null => {
+          if (!item) return null;
+          return {
+            ...item,
+            teamA: updateTeam(item.teamA),
+            teamB: updateTeam(item.teamB),
+            waiting: item.waiting?.map((w) => ({ ...w, player: updatePlayerObj(w.player) })),
+          };
+        };
+
+        const updatedActiveMatches = get().activeMatches.map(updateScheduleItem);
+        const updatedMatchHistory = get().matchHistory.map((m) => updateScheduleItem(m) as ScheduleItem);
+        const updatedFullSchedule = get().fullSchedule.map((m) => updateScheduleItem(m) as ScheduleItem);
+
+        // 4. Update current club in clubs
+        const updatedClubs = clubs.map(c => {
+          if (c.id === currentClubId) {
+            return {
+              ...c,
+              players: updatedPlayers,
+              history: updatedHistory,
+              activeMatches: updatedActiveMatches,
+              matchHistory: updatedMatchHistory,
+              fullSchedule: updatedFullSchedule,
+            };
+          }
+          return c;
+        });
+
+        set({
+          players: updatedPlayers,
+          history: updatedHistory,
+          activeMatches: updatedActiveMatches,
+          matchHistory: updatedMatchHistory,
+          fullSchedule: updatedFullSchedule,
+          clubs: updatedClubs,
+        });
+
+        return true;
+      },
+      
       updatePlayerLevel: (id: string, level: number) => set((state) => {
         const newLevel = Math.max(1, Math.min(9, level));
         const updatePlayerObj = <T extends Player>(p: T): T => {
@@ -472,6 +564,84 @@ export const useStore = create<AppState>()(
           clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, history: newHistory } : c)
         };
       }),
+
+      updateHistoryPlayer: (oldName: string, newName: string, newGender: Gender) => {
+        const { history, players, clubs, currentClubId, setErrorMsg } = get();
+        const trimmedName = newName.trim();
+        if (!trimmedName) {
+          setErrorMsg('選手姓名不可為空白！');
+          setTimeout(() => get().setErrorMsg(null), 2500);
+          return false;
+        }
+
+        if (oldName !== trimmedName && history.some(h => h.name.trim().toLowerCase() === trimmedName.toLowerCase())) {
+          setErrorMsg(`歷史名單中已存在「${trimmedName}」！`);
+          setTimeout(() => get().setErrorMsg(null), 2500);
+          return false;
+        }
+
+        const updatedHistory = history.map(h => 
+          h.name === oldName ? { name: trimmedName, gender: newGender } : h
+        );
+
+        // Also if player is currently in active players list, update them as well!
+        const targetPlayer = players.find(p => p.name === oldName);
+        let updatedPlayers = players;
+        let updatedActiveMatches = get().activeMatches;
+        let updatedMatchHistory = get().matchHistory;
+        let updatedFullSchedule = get().fullSchedule;
+
+        if (targetPlayer) {
+          const playerId = targetPlayer.id;
+          updatedPlayers = players.map(p => 
+            p.id === playerId ? { ...p, name: trimmedName, gender: newGender } : p
+          );
+          const updatePlayerObj = <T extends Player>(p: T): T => {
+            return p.id === playerId ? { ...p, name: trimmedName, gender: newGender } : p;
+          };
+          const updateTeam = (team: { player1: Player; player2: Player }) => ({
+            player1: updatePlayerObj(team.player1),
+            player2: updatePlayerObj(team.player2),
+          });
+          const updateScheduleItem = (item: ScheduleItem | null): ScheduleItem | null => {
+            if (!item) return null;
+            return {
+              ...item,
+              teamA: updateTeam(item.teamA),
+              teamB: updateTeam(item.teamB),
+              waiting: item.waiting?.map((w) => ({ ...w, player: updatePlayerObj(w.player) })),
+            };
+          };
+          updatedActiveMatches = get().activeMatches.map(updateScheduleItem);
+          updatedMatchHistory = get().matchHistory.map((m) => updateScheduleItem(m) as ScheduleItem);
+          updatedFullSchedule = get().fullSchedule.map((m) => updateScheduleItem(m) as ScheduleItem);
+        }
+
+        const updatedClubs = clubs.map(c => {
+          if (c.id === currentClubId) {
+            return {
+              ...c,
+              history: updatedHistory,
+              players: updatedPlayers,
+              activeMatches: updatedActiveMatches,
+              matchHistory: updatedMatchHistory,
+              fullSchedule: updatedFullSchedule,
+            };
+          }
+          return c;
+        });
+
+        set({
+          history: updatedHistory,
+          players: updatedPlayers,
+          activeMatches: updatedActiveMatches,
+          matchHistory: updatedMatchHistory,
+          fullSchedule: updatedFullSchedule,
+          clubs: updatedClubs,
+        });
+
+        return true;
+      },
       
       removeFromHistory: (name: string) => set((state) => {
         const newHistory = state.history.filter(p => p.name !== name);

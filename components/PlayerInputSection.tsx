@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X, Search, Filter, UserCheck, UserX, RotateCcw, Shield, Settings } from 'lucide-react';
+import { Trash2, UserPlus, Users, History, Upload, Activity, Share2, Play, Pause, Plus, Minus, X, Search, Filter, UserCheck, UserX, RotateCcw, Shield, Settings, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, Gender } from '../types';
 import PlayerCard from './PlayerCard';
 import ImportModal from './ImportModal';
 import { ShareGroupModal } from './ShareGroupModal';
 import ClubManagerModal from './ClubManagerModal';
+import EditPlayerModal from './EditPlayerModal';
 import { useStore } from '../store/useStore';
 
 const PlayerListItem: React.FC<{ 
@@ -13,13 +14,15 @@ const PlayerListItem: React.FC<{
   enableSkillLevel: boolean, 
   onUpdateLevel: (id: string, level: number) => void, 
   onToggleStatus: (id: string) => void, 
-  onRemove: (id: string) => void 
+  onRemove: (id: string) => void,
+  onEdit: (player: Player) => void
 }> = ({ 
   player, 
   enableSkillLevel, 
   onUpdateLevel, 
   onToggleStatus, 
-  onRemove 
+  onRemove,
+  onEdit
 }) => {
   const isMale = player.gender === Gender.MALE;
   const isSuspended = player.status === 'SUSPENDED';
@@ -37,14 +40,28 @@ const PlayerListItem: React.FC<{
           : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700 shadow-sm hover:shadow'
       }`}
     >
-      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        <div className={`w-2 h-2 rounded-full shrink-0 ${isSuspended ? 'bg-slate-300 dark:bg-slate-600' : isMale ? 'bg-blue-400' : 'bg-pink-400'}`} />
-        <span className={`font-bold truncate text-sm sm:text-base ${isSuspended ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
+      <div 
+        onClick={() => onEdit(player)}
+        title="點擊修改選手姓名與性別"
+        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group/name select-none"
+      >
+        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isSuspended ? 'bg-slate-300 dark:bg-slate-600' : isMale ? 'bg-blue-400' : 'bg-pink-400'}`} />
+        <span className={`font-bold truncate text-sm sm:text-base group-hover/name:text-emerald-600 dark:group-hover/name:text-emerald-400 group-hover/name:underline transition-colors ${isSuspended ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
           {player.name}
+        </span>
+        <span className="opacity-0 group-hover/name:opacity-100 text-slate-400 hover:text-emerald-500 transition-opacity p-0.5">
+          <Pencil size={12} strokeWidth={2.5} />
         </span>
       </div>
       
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <button 
+          onClick={() => onEdit(player)} 
+          title="修改姓名與性別" 
+          className="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 transition-colors"
+        >
+          <Pencil size={14} strokeWidth={2.5} />
+        </button>
         {enableSkillLevel && (
           <div className="flex items-center bg-slate-100 dark:bg-slate-700/50 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600">
              <button onClick={() => onUpdateLevel(player.id, level - 1)} disabled={level <= 1} className="px-2 py-1 sm:py-1.5 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-30"><Minus size={12} strokeWidth={3}/></button>
@@ -89,6 +106,7 @@ const PlayerInputSection: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isClubManagerOpen, setIsClubManagerOpen] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<Player | { name: string; gender: Gender } | null>(null);
 
   const currentClub = clubs.find(c => c.id === currentClubId) || clubs[0];
 
@@ -402,6 +420,13 @@ const PlayerInputSection: React.FC = () => {
                       {h.name}
                     </button>
                     <button
+                      onClick={(e) => { e.stopPropagation(); setEditingPlayer({ name: h.name, gender: h.gender }); }}
+                      title="修改此歷史球員姓名/性別"
+                      className="px-1.5 py-1.5 text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors outline-none"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); removeFromHistory(h.name); }}
                       className="px-2 py-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors outline-none"
                     >
@@ -615,6 +640,7 @@ const PlayerInputSection: React.FC = () => {
                         onUpdateLevel={updatePlayerLevel}
                         onToggleStatus={togglePlayerStatus}
                         onRemove={removePlayer}
+                        onEdit={setEditingPlayer}
                       />
                     ))}
                     {maleFiltered.length === 0 && (
@@ -651,6 +677,7 @@ const PlayerInputSection: React.FC = () => {
                         onUpdateLevel={updatePlayerLevel}
                         onToggleStatus={togglePlayerStatus}
                         onRemove={removePlayer}
+                        onEdit={setEditingPlayer}
                       />
                     ))}
                     {femaleFiltered.length === 0 && (
@@ -681,6 +708,13 @@ const PlayerInputSection: React.FC = () => {
       <ClubManagerModal
         isOpen={isClubManagerOpen}
         onClose={() => setIsClubManagerOpen(false)}
+      />
+
+      <EditPlayerModal
+        isOpen={!!editingPlayer}
+        player={editingPlayer}
+        onClose={() => setEditingPlayer(null)}
+        isHistoryOnly={editingPlayer ? !('id' in editingPlayer) : false}
       />
     </section>
   );

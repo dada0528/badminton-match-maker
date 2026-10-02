@@ -1,7 +1,7 @@
 import React from 'react';
 import { Player, Gender } from '../types';
 import { COLORS } from '../constants';
-import { X, User, Plus, Minus, Pause, Play } from 'lucide-react';
+import { X, User, Plus, Minus, Pause, Play, Pencil } from 'lucide-react';
 
 interface PlayerCardProps {
   player: Player;
@@ -13,6 +13,7 @@ interface PlayerCardProps {
   onLevelChange?: (id: string, level: number) => void;
   onStatusToggle?: (id: string) => void;
   onClick?: (player: Player) => void;
+  onEdit?: (player: Player) => void;
   restCount?: number;
 }
 
@@ -26,6 +27,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
   onLevelChange,
   onStatusToggle,
   onClick,
+  onEdit,
   restCount
 }) => {
   const isMale = player.gender === Gender.MALE;
@@ -68,9 +70,22 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
           <User size={size === 'sm' ? 12 : 16} className={isMale ? 'text-blue-600 dark:text-blue-300' : 'text-pink-600 dark:text-pink-300'} />
         )}
       </div>
-      <span className={`font-bold tracking-wide ${autoWidth ? '' : 'truncate max-w-[100px]'} ${isSuspended ? 'line-through opacity-70' : ''}`}>
+      <span 
+        onClick={onEdit ? (e) => { e.stopPropagation(); onEdit(player); } : undefined}
+        title={onEdit ? "點擊修改姓名與性別" : undefined}
+        className={`font-bold tracking-wide ${autoWidth ? '' : 'truncate max-w-[100px]'} ${isSuspended ? 'line-through opacity-70' : ''} ${onEdit ? 'hover:underline cursor-pointer' : ''}`}>
         {player.name}
       </span>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onEdit(player); }}
+          title="修改姓名與性別"
+          className="w-5 h-5 flex items-center justify-center -ml-1 text-slate-400 hover:text-emerald-500 rounded-full hover:bg-white/40 dark:hover:bg-slate-700/50 transition-colors shrink-0"
+        >
+          <Pencil size={11} strokeWidth={2.5} />
+        </button>
+      )}
       
       {restCount !== undefined && restCount > 0 && (
         <span 
