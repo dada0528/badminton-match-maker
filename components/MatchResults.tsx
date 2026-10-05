@@ -28,7 +28,7 @@ const CourtPlayerBadge = ({
       : 'bg-pink-500/90 border-pink-200/50 text-white dark:bg-pink-600/90'
   }`}>
     <span 
-      className="whitespace-nowrap tracking-wide select-none"
+      className="whitespace-nowrap tracking-wide select-none cursor-pointer"
       style={{ lineHeight: '1.2' }}
     >
       {player.name}
@@ -48,6 +48,12 @@ const CourtPlayerBadge = ({
     )}
   </motion.div>
 );
+
+const shouldShowMatchMessage = (msg?: string) => {
+  if (!msg) return false;
+  if (msg.includes('自由配') || msg.includes('不分男女') || msg.includes('全男雙') || msg.includes('全女雙')) return false;
+  return true;
+};
 
 const getLandscapeColsClass = (count: number) => {
   if (count <= 1) return 'grid-cols-1';
@@ -525,7 +531,7 @@ const MatchResults: React.FC = () => {
                            <div className="flex-1">
                              <div className="flex justify-between items-start">
                                <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Arena status</span>
-                               {match && match.message && (
+                               {match && shouldShowMatchMessage(match.message) && (
                                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase">
                                    {match.message}
                                  </span>
@@ -761,7 +767,7 @@ const MatchResults: React.FC = () => {
                         <span className="text-[10px] text-emerald-100 uppercase mb-0.5 tracking-widest">{isFullScheduleMode ? 'SEQ' : 'CRT'}</span>
                         <span className="text-2xl">{isFullScheduleMode ? idx + 1 : courtNames[idx]}</span>
                       </div>
-                      {match && match.message && (
+                      {match && shouldShowMatchMessage(match.message) && (
                         <div className="text-xs bg-amber-500/20 text-amber-400 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider">
                           {match.message}
                         </div>

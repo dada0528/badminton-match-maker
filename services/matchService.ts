@@ -764,15 +764,7 @@ export const generateNextMatchesGroup = (
       );
 
       let msg: string | undefined = undefined;
-      if (freeGender) {
-          const mCount = [m.t1[0], m.t1[1], m.t2[0], m.t2[1]].filter(p => p.player.gender === Gender.MALE).length;
-          const fCount = 4 - mCount;
-          if (mCount === 3 && fCount === 1) msg = '3男1女 自由配';
-          else if (mCount === 2 && fCount === 2) msg = '2男2女 自由配';
-          else if (mCount === 4) msg = '全男雙';
-          else if (fCount === 4) msg = '全女雙';
-          else msg = '不分男女';
-      } else if (type === MatchType.MIXED_DOUBLES && m.cType !== MatchType.MIXED_DOUBLES) {
+      if (!freeGender && type === MatchType.MIXED_DOUBLES && m.cType !== MatchType.MIXED_DOUBLES) {
           if (m.cType === MatchType.MENS_DOUBLES) msg = '彈性切換男雙';
           else if (m.cType === MatchType.WOMENS_DOUBLES) msg = '彈性切換女雙';
           else msg = '彈性切換雙打';
