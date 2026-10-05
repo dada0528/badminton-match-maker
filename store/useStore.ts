@@ -27,6 +27,7 @@ interface AppState {
   scheduleType: MatchType;
   mixPartners: boolean;
   avoidGenderSkew: boolean;
+  freeGender: boolean;
   enableSkillLevel: boolean;
   skillMode: SkillMode;
   autoVoiceEnabled: boolean;
@@ -78,6 +79,7 @@ interface AppState {
   setScheduleType: (type: MatchType) => void;
   setMixPartners: (mix: boolean) => void;
   setAvoidGenderSkew: (avoid: boolean) => void;
+  setFreeGender: (freeGender: boolean) => void;
   setEnableSkillLevel: (enable: boolean) => void;
   setSkillMode: (mode: SkillMode) => void;
   setAutoVoiceEnabled: (enable: boolean) => void;
@@ -106,6 +108,7 @@ const defaultInitialClub: Club = {
   fixedPairs: [],
   firstMatchPlayerIds: [],
   createdAt: Date.now(),
+  freeGender: false,
 };
 
 export const useStore = create<AppState>()(
@@ -128,6 +131,7 @@ export const useStore = create<AppState>()(
       scheduleType: MatchType.RANDOM,
       mixPartners: true,
       avoidGenderSkew: true,
+      freeGender: false,
       enableSkillLevel: false,
       skillMode: 'BALANCED',
       autoVoiceEnabled: false,
@@ -242,6 +246,7 @@ export const useStore = create<AppState>()(
               paidPlayerIds: nextClub.paidPlayerIds || [],
               fixedPairs: nextClub.fixedPairs || [],
               firstMatchPlayerIds: nextClub.firstMatchPlayerIds || [],
+              freeGender: nextClub.freeGender ?? false,
             };
           }
           return { clubs: remainingClubs };
@@ -270,6 +275,7 @@ export const useStore = create<AppState>()(
                 paidPlayerIds: state.paidPlayerIds,
                 fixedPairs: state.fixedPairs,
                 firstMatchPlayerIds: state.firstMatchPlayerIds,
+                freeGender: state.freeGender,
               };
             }
             return c;
@@ -291,6 +297,7 @@ export const useStore = create<AppState>()(
             paidPlayerIds: next.paidPlayerIds || [],
             fixedPairs: next.fixedPairs || [],
             firstMatchPlayerIds: next.firstMatchPlayerIds || [],
+            freeGender: next.freeGender ?? false,
           };
         });
       },
@@ -754,6 +761,10 @@ export const useStore = create<AppState>()(
       setScheduleType: (scheduleType) => set({ scheduleType }),
       setMixPartners: (mixPartners) => set({ mixPartners }),
       setAvoidGenderSkew: (avoidGenderSkew) => set({ avoidGenderSkew }),
+      setFreeGender: (freeGender) => set((state) => ({
+        freeGender,
+        clubs: state.clubs.map(c => c.id === state.currentClubId ? { ...c, freeGender } : c)
+      })),
       setEnableSkillLevel: (enableSkillLevel) => set({ enableSkillLevel }),
       setSkillMode: (skillMode) => set({ skillMode }),
       setAutoVoiceEnabled: (autoVoiceEnabled) => set({ autoVoiceEnabled }),
@@ -805,6 +816,7 @@ export const useStore = create<AppState>()(
         scheduleType: state.scheduleType,
         mixPartners: state.mixPartners,
         avoidGenderSkew: state.avoidGenderSkew,
+        freeGender: state.freeGender,
         enableSkillLevel: state.enableSkillLevel,
         skillMode: state.skillMode,
         autoVoiceEnabled: state.autoVoiceEnabled,

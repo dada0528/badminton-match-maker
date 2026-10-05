@@ -89,6 +89,7 @@ const MatchResults: React.FC = () => {
     undoMatch,
     mixPartners,
     avoidGenderSkew,
+    freeGender,
     fixedPairs,
     courtNames,
     autoVoiceEnabled,
@@ -127,8 +128,8 @@ const MatchResults: React.FC = () => {
     if (isFullScheduleMode) return [];
     if (!activeMatches || activeMatches.length === 0) return [];
     
-    return suggestWaitList(players, matchHistory, activeMatches, scheduleType);
-  }, [players, matchHistory, activeMatches, scheduleType]);
+    return suggestWaitList(players, matchHistory, activeMatches, scheduleType, freeGender);
+  }, [players, matchHistory, activeMatches, scheduleType, freeGender]);
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
@@ -138,11 +139,13 @@ const MatchResults: React.FC = () => {
   };
 
   const handleEndMatch = (courtIndex: number) => {
-    const { players, activeMatches, matchHistory, mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs } = useStore.getState();
+    const { players, activeMatches, matchHistory, mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, freeGender, skillMode } = useStore.getState();
     
-    let eligiblePlayers = [...players];
-    if (scheduleType === MatchType.MENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.MALE);
-    if (scheduleType === MatchType.WOMENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.FEMALE);
+    let eligiblePlayers = [...players].filter(p => p.status !== 'SUSPENDED');
+    if (!freeGender) {
+      if (scheduleType === MatchType.MENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.MALE);
+      if (scheduleType === MatchType.WOMENS_DOUBLES) eligiblePlayers = eligiblePlayers.filter(p => p.gender === Gender.FEMALE);
+    }
     
     if (eligiblePlayers.length < 4) {
         alert('總人數不足 4 人，無法繼續安排比賽');
@@ -166,7 +169,8 @@ const MatchResults: React.FC = () => {
         fixedPairs,
         courtIndex + 1,
         [],
-        skillMode
+        skillMode,
+        freeGender
     );
     
     if (result.error) {
@@ -244,7 +248,7 @@ const MatchResults: React.FC = () => {
       
       for (let i = matchIdx + 1; i < fullSchedule.length; i++) {
          const nextMatchResult = generateNextMatch(
-            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, [], skillMode
+            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, [], skillMode, freeGender
          );
          if (nextMatchResult.match) {
              nextMatchResult.match.sequence = i + 1;
@@ -280,13 +284,15 @@ const MatchResults: React.FC = () => {
         currentMatch.teamB.player1.id,
         currentMatch.teamB.player2.id
       ]);
-      benchPlayers = players.filter(p => !playingIds.has(p.id));
+      benchPlayers = players.filter(p => !playingIds.has(p.id) && p.status !== 'SUSPENDED');
     } else {
       benchPlayers = waitingPlayers.map(wp => wp.player);
     }
 
-    if (scheduleType === MatchType.MENS_DOUBLES) benchPlayers = benchPlayers.filter(p => p.gender === Gender.MALE);
-    if (scheduleType === MatchType.WOMENS_DOUBLES) benchPlayers = benchPlayers.filter(p => p.gender === Gender.FEMALE);
+    if (!freeGender) {
+      if (scheduleType === MatchType.MENS_DOUBLES) benchPlayers = benchPlayers.filter(p => p.gender === Gender.MALE);
+      if (scheduleType === MatchType.WOMENS_DOUBLES) benchPlayers = benchPlayers.filter(p => p.gender === Gender.FEMALE);
+    }
 
     const otherPlayersInMatch = [
       currentMatch.teamA.player1,

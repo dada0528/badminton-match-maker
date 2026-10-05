@@ -29,6 +29,7 @@ const ScheduleControls: React.FC = () => {
     courtCount, 
     mixPartners, 
     avoidGenderSkew,
+    freeGender,
     enableSkillLevel,
     skillMode,
     autoVoiceEnabled,
@@ -40,6 +41,7 @@ const ScheduleControls: React.FC = () => {
     setScheduleType, 
     setMixPartners, 
     setAvoidGenderSkew,
+    setFreeGender,
     setEnableSkillLevel,
     setSkillMode,
     setAutoVoiceEnabled,
@@ -67,7 +69,7 @@ const ScheduleControls: React.FC = () => {
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
     
     const result = generateNextMatchesGroup(
-        players, [], [], mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, courtCount, 1, validFirstMatchIds, skillMode, 1
+        players, [], [], mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, courtCount, 1, validFirstMatchIds, skillMode, 1, freeGender
     );
 
     if (result.error) {
@@ -102,7 +104,7 @@ const ScheduleControls: React.FC = () => {
 
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
     const result = generateSchedule(
-        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs, skillMode
+        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs, skillMode, freeGender
     );
 
     if (result.error) {
@@ -287,6 +289,13 @@ const ScheduleControls: React.FC = () => {
                  </div>
                )}
                <ControlToggle 
+                 active={freeGender} 
+                 onClick={() => setFreeGender(!freeGender)}
+                 label="不分男女" 
+                 title="不強制排混雙，允許3男1女或2男2女平均輪替 (避免3女1男)，避免女生人數少時重複對戰，所有人出場次數維持平均"
+                 colorClass="bg-teal-50 dark:bg-teal-900/40 border-teal-300 dark:border-teal-500 text-teal-700 dark:text-teal-300 shadow-sm"
+               />
+               <ControlToggle 
                  active={mixPartners} 
                  onClick={() => setMixPartners(!mixPartners)}
                  label="盡量交換隊友" 
@@ -306,6 +315,12 @@ const ScheduleControls: React.FC = () => {
                  title="自動語音播報下一場對戰名單"
                  colorClass="bg-pink-50 dark:bg-pink-900/40 border-pink-300 dark:border-pink-500 text-pink-700 dark:text-pink-300 shadow-sm"
                />
+               {freeGender && (
+                 <div className="col-span-2 text-xs bg-teal-50/80 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 p-2.5 rounded-xl border border-teal-200/80 dark:border-teal-800/80 flex items-start gap-2">
+                   <span className="font-bold shrink-0">✨ 不分男女模式：</span>
+                   <span className="leading-relaxed">排點將不拘性別隨機平均分配，可出現 3男1女 或 2男2女（已自動排除 3女1男），解決少數女生固定對戰的問題，出場次數與搭檔維持平均！</span>
+                 </div>
+               )}
             </div>
           </div>
 

@@ -71,9 +71,9 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
         )}
       </div>
       <span 
-        onClick={onEdit ? (e) => { e.stopPropagation(); onEdit(player); } : undefined}
-        title={onEdit ? "點擊修改姓名與性別" : undefined}
-        className={`font-bold tracking-wide ${autoWidth ? '' : 'truncate max-w-[100px]'} ${isSuspended ? 'line-through opacity-70' : ''} ${onEdit ? 'hover:underline cursor-pointer' : ''}`}>
+        onClick={onClick ? undefined : onEdit ? (e) => { e.stopPropagation(); onEdit(player); } : undefined}
+        title={!onClick && onEdit ? "點擊修改姓名與性別" : undefined}
+        className={`font-bold tracking-wide ${autoWidth ? '' : 'truncate max-w-[100px]'} ${isSuspended ? 'line-through opacity-70' : ''} ${!onClick && onEdit ? 'hover:underline cursor-pointer' : ''}`}>
         {player.name}
       </span>
       {onEdit && (

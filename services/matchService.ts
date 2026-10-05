@@ -110,12 +110,15 @@ export const generateNextMatchesGroup = (
   startCourtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
   skillMode: SkillMode = 'BALANCED',
-  startSequence: number = 1
+  startSequence: number = 1,
+  freeGender: boolean = false
 ): { matches: ScheduleItem[], error: string | null, notice?: string | null } => {
 
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
-  if (type === MatchType.MENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.MALE);
-  if (type === MatchType.WOMENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.FEMALE);
+  if (!freeGender) {
+    if (type === MatchType.MENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.MALE);
+    if (type === MatchType.WOMENS_DOUBLES) pool = pool.filter(p => p.gender === Gender.FEMALE);
+  }
   
   if (pool.length < 4) return { matches: [], error: '人數不足 4 人，無法排程' };
   
@@ -313,7 +316,9 @@ export const generateNextMatchesGroup = (
   let courtTypes: MatchType[] = [];
   let fallbackNotice: string | null = null;
 
-  if (type === MatchType.MIXED_DOUBLES) {
+  if (freeGender) {
+      courtTypes = Array(targetCourts).fill(MatchType.RANDOM);
+  } else if (type === MatchType.MIXED_DOUBLES) {
       const availM = availableStats.filter(s => s.player.gender === Gender.MALE);
       const availF = availableStats.filter(s => s.player.gender === Gender.FEMALE);
 
@@ -525,12 +530,30 @@ export const generateNextMatchesGroup = (
           if (anyPresent && !inT1 && !inT2) penalty += 10000000; 
       });
 
-      // Gender skew check for non-mixed courts
-      if (avoidGenderSkew && matchType !== MatchType.MIXED_DOUBLES) {
-          const t1M = t1.filter(p => p.player.gender === Gender.MALE).length;
-          const t2M = t2.filter(p => p.player.gender === Gender.MALE).length;
-          const totalM = t1M + t2M;
-          
+      // Gender composition check & skew avoidance
+      const t1M = t1.filter(p => p.player.gender === Gender.MALE).length;
+      const t2M = t2.filter(p => p.player.gender === Gender.MALE).length;
+      const totalM = t1M + t2M;
+      const totalF = 4 - totalM;
+
+      if (freeGender) {
+          // Rule 1: STRICTLY AVOID 3 females + 1 male (3女1男)
+          if (totalF === 3 && totalM === 1) {
+              if (availableStats.length >= 5) {
+                  penalty += 5000000000; // 5 Billion: strictly eliminate 3 females + 1 male
+              } else {
+                  penalty += 5000000;
+              }
+          }
+
+          // Rule 2: If 2 males and 2 females on the same court, prevent 2M vs 2F (encourage 1M1F vs 1M1F)
+          if (avoidGenderSkew && ((t1M === 2 && t2M === 0) || (t1M === 0 && t2M === 2))) {
+              penalty += 1000000;
+          }
+
+          // Rule 3: 3 males + 1 female (3男1女): totalM === 3, totalF === 1: FULLY ALLOWED (0 penalty)
+          // Rule 4: 4 males or 4 females: FULLY ALLOWED (0 penalty)
+      } else if (avoidGenderSkew && matchType !== MatchType.MIXED_DOUBLES) {
           if ((t1M === 2 && t2M === 0) || (t1M === 0 && t2M === 2)) {
               penalty += 1000000;
           } else if (totalM === 1 || totalM === 3) {
@@ -577,7 +600,7 @@ export const generateNextMatchesGroup = (
 
   const neededTotal = targetCourts * 4;
 
-  if (type === MatchType.MIXED_DOUBLES) {
+  if (type === MatchType.MIXED_DOUBLES && !freeGender) {
       const availM = availableStats.filter(s => s.player.gender === Gender.MALE);
       const availF = availableStats.filter(s => s.player.gender === Gender.FEMALE);
       candidatePoolM = availM;
@@ -593,7 +616,7 @@ export const generateNextMatchesGroup = (
      const matches: Array<{t1: PlayerStats[], t2: PlayerStats[], cType: MatchType}> = [];
      
      let sampledPool: PlayerStats[];
-     if (type === MatchType.MIXED_DOUBLES) {
+     if (type === MatchType.MIXED_DOUBLES && !freeGender) {
          const mMixNeeded = courtTypes.filter(c => c === MatchType.MIXED_DOUBLES).length * 2;
          const mMenNeeded = courtTypes.filter(c => c === MatchType.MENS_DOUBLES).length * 4;
          const mNeeded = mMixNeeded + mMenNeeded;
@@ -741,7 +764,15 @@ export const generateNextMatchesGroup = (
       );
 
       let msg: string | undefined = undefined;
-      if (type === MatchType.MIXED_DOUBLES && m.cType !== MatchType.MIXED_DOUBLES) {
+      if (freeGender) {
+          const mCount = [m.t1[0], m.t1[1], m.t2[0], m.t2[1]].filter(p => p.player.gender === Gender.MALE).length;
+          const fCount = 4 - mCount;
+          if (mCount === 3 && fCount === 1) msg = '3男1女 自由配';
+          else if (mCount === 2 && fCount === 2) msg = '2男2女 自由配';
+          else if (mCount === 4) msg = '全男雙';
+          else if (fCount === 4) msg = '全女雙';
+          else msg = '不分男女';
+      } else if (type === MatchType.MIXED_DOUBLES && m.cType !== MatchType.MIXED_DOUBLES) {
           if (m.cType === MatchType.MENS_DOUBLES) msg = '彈性切換男雙';
           else if (m.cType === MatchType.WOMENS_DOUBLES) msg = '彈性切換女雙';
           else msg = '彈性切換雙打';
@@ -769,10 +800,11 @@ export const generateNextMatch = (
   fixedPairs: Array<[string, string]> = [],
   courtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
-  skillMode: SkillMode = 'BALANCED'
+  skillMode: SkillMode = 'BALANCED',
+  freeGender: boolean = false
 ): { match: ScheduleItem | null, error: string | null, notice?: string | null } => {
     const result = generateNextMatchesGroup(
-        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1
+        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1, freeGender
     );
     if (result.error || result.matches.length === 0) return { match: null, error: result.error, notice: result.notice };
     return { match: result.matches[0], error: null, notice: result.notice };
@@ -788,7 +820,8 @@ export const generateSchedule = (
   firstMatchPlayerIds: string[] = [], 
   enableSkillLevel: boolean = false, 
   fixedPairs: Array<[string, string]> = [], 
-  skillMode: SkillMode = 'BALANCED'
+  skillMode: SkillMode = 'BALANCED',
+  freeGender: boolean = false
 ): { schedule: ScheduleItem[], error: string | null, notice?: string | null } => {
 
   const schedule: ScheduleItem[] = [];
@@ -817,7 +850,8 @@ export const generateSchedule = (
           1,
           roundNumber === 1 ? firstMatchPlayerIds : [],
           skillMode,
-          currentMatchCount + 1
+          currentMatchCount + 1,
+          freeGender
       );
 
       if (result.error) return { schedule: [], error: result.error };
@@ -839,7 +873,8 @@ export const suggestWaitList = (
   allPlayers: Player[],
   matchHistory: ScheduleItem[],
   activeMatches: ScheduleItem[],
-  type: MatchType
+  type: MatchType,
+  freeGender: boolean = false
 ): WaitingPlayerInfo[] => {
   const statsMap = new Map<string, PlayerStats>();
   

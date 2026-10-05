@@ -27,6 +27,7 @@ export interface Club {
   fixedPairs?: Array<[string, string]>;
   firstMatchPlayerIds?: string[];
   createdAt?: number;
+  freeGender?: boolean;
 }
 
 export interface Player {
