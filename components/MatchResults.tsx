@@ -1,10 +1,14 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus, Pencil } from 'lucide-react';
+import { Coffee, Calendar, Download, Shuffle, Volume2, VolumeX, BarChart3, ArrowRight, Maximize, Minimize, RotateCw, Users, MoveHorizontal, X, LayoutTemplate, Plus, Minus, Pencil, Wallet, Clock, UserX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
 import { MatchType, Gender, ScheduleItem, Player } from '../types';
 import PlayerCard from './PlayerCard';
 import EditPlayerModal from './EditPlayerModal';
+import PaymentManagerModal from './PaymentManagerModal';
+import MatchCombinationsModal from './MatchCombinationsModal';
+import PlayerWaitAnalysisModal from './PlayerWaitAnalysisModal';
+import AvoidPlayersModal from './AvoidPlayersModal';
 import html2canvas from 'html2canvas';
 import { generateNextMatch, suggestWaitList } from '../services/matchService';
 
@@ -103,7 +107,8 @@ const MatchResults: React.FC = () => {
     togglePlayerStatus,
     updatePlayerLevel,
     isFullscreen,
-    setIsFullscreen
+    setIsFullscreen,
+    avoidPairs
   } = useStore();
 
   const isFullScheduleMode = fullSchedule && fullSchedule.length > 0;
@@ -113,6 +118,11 @@ const MatchResults: React.FC = () => {
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [isLandscape, setIsLandscape] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [isCombinationsOpen, setIsCombinationsOpen] = useState(false);
+  const [isAvoidModalOpen, setIsAvoidModalOpen] = useState(false);
+  const [isWaitAnalysisOpen, setIsWaitAnalysisOpen] = useState(false);
+  const [targetWaitPlayerId, setTargetWaitPlayerId] = useState<string | undefined>(undefined);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [swappingPlayer, setSwappingPlayer] = useState<{
     matchIdx: number;
     team: 'teamA' | 'teamB';
@@ -145,7 +155,7 @@ const MatchResults: React.FC = () => {
   };
 
   const handleEndMatch = (courtIndex: number) => {
-    const { players, activeMatches, matchHistory, mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, freeGender, skillMode } = useStore.getState();
+    const { players, activeMatches, matchHistory, mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, freeGender, skillMode, avoidPairs } = useStore.getState();
     
     let eligiblePlayers = [...players].filter(p => p.status !== 'SUSPENDED');
     if (!freeGender) {
@@ -176,7 +186,8 @@ const MatchResults: React.FC = () => {
         courtIndex + 1,
         [],
         skillMode,
-        freeGender
+        freeGender,
+        avoidPairs
     );
     
     if (result.error) {
@@ -248,13 +259,37 @@ const MatchResults: React.FC = () => {
       matchToEdit[team][playerKey] = targetPlayer;
     }
 
+    // Check avoid conflict for the proposed 4 players on this court
+    const courtPlayerIds = [
+      matchToEdit.teamA.player1.id,
+      matchToEdit.teamA.player2.id,
+      matchToEdit.teamB.player1.id,
+      matchToEdit.teamB.player2.id
+    ];
+    
+    for (let i = 0; i < courtPlayerIds.length; i++) {
+      for (let j = i + 1; j < courtPlayerIds.length; j++) {
+        const idA = courtPlayerIds[i];
+        const idB = courtPlayerIds[j];
+        const isConflict = avoidPairs.some(
+          ([p1, p2]) => (p1 === idA && p2 === idB) || (p1 === idB && p2 === idA)
+        );
+        if (isConflict) {
+          const nameA = players.find(p => p.id === idA)?.name || '選手';
+          const nameB = players.find(p => p.id === idB)?.name || '選手';
+          alert(`無法完成換人：${nameA} 與 ${nameB} 設定為同場迴避（不能同場打球，搭檔或對戰皆不行）！`);
+          return;
+        }
+      }
+    }
+
     if (isFullScheduleMode) {
       let newHistory = fullSchedule.slice(0, matchIdx);
       newHistory.push(matchToEdit);
       
       for (let i = matchIdx + 1; i < fullSchedule.length; i++) {
          const nextMatchResult = generateNextMatch(
-            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, [], skillMode, freeGender
+            players, newHistory, [], mixPartners, avoidGenderSkew, scheduleType, enableSkillLevel, fixedPairs, 1, [], skillMode, freeGender, avoidPairs
          );
          if (nextMatchResult.match) {
              nextMatchResult.match.sequence = i + 1;
@@ -407,14 +442,26 @@ const MatchResults: React.FC = () => {
                    <h4 className="text-sm font-bold text-slate-500 mb-3 uppercase">與休息中選手替換</h4>
                    {benchPlayers.length > 0 ? (
                        <div className="flex flex-wrap gap-3">
-                         {benchPlayers.map(p => (
-                             <PlayerCard 
-                               key={p.id} 
-                               player={p} 
-                               onClick={() => handleSwapConfirm(p)}
-                               className="!border-emerald-200"
-                             />
-                         ))}
+                         {benchPlayers.map(p => {
+                             const otherIds = new Set(otherPlayersInMatch.map(op => op.id));
+                             const hasAvoidConflict = avoidPairs.some(
+                               ([p1, p2]) => (p1 === p.id && otherIds.has(p2)) || (p2 === p.id && otherIds.has(p1))
+                             );
+                             return (
+                               <div key={p.id} className="relative">
+                                 <PlayerCard 
+                                   player={p} 
+                                   onClick={() => handleSwapConfirm(p)}
+                                   className={hasAvoidConflict ? "!border-rose-400 opacity-60" : "!border-emerald-200"}
+                                 />
+                                 {hasAvoidConflict && (
+                                   <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm pointer-events-none">
+                                     迴避衝突
+                                   </span>
+                                 )}
+                               </div>
+                             );
+                         })}
                        </div>
                    ) : (
                        <p className="text-sm text-slate-400">目前沒有符合條件的休息選手</p>
@@ -456,38 +503,81 @@ const MatchResults: React.FC = () => {
                
                <div className="flex flex-row flex-nowrap items-center justify-center gap-2 w-full overflow-x-auto hide-scrollbar pb-1">
                  <motion.button 
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.95 }}
-                   onClick={() => setAutoVoiceEnabled(!autoVoiceEnabled)}
-                   className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm whitespace-nowrap shrink-0 shadow-sm ${
-                     autoVoiceEnabled
-                       ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-400 border border-pink-200 dark:border-pink-800'
-                       : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                   }`}
-                   title="自動語音播報設定"
-                 >
-                   {autoVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                   <span>語音: {autoVoiceEnabled ? '開' : '關'}</span>
-                 </motion.button>
-                 <motion.button 
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.95 }}
-                   onClick={toggleFullscreen}
-                   className="bg-slate-800 text-white dark:bg-emerald-500 dark:text-white px-5 py-2 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-2 text-sm whitespace-nowrap shrink-0"
-                 >
-                   <Maximize size={16} />
-                   <span>全螢幕展示</span>
-                 </motion.button>
-                 <motion.button 
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.95 }}
-                   onClick={handleExport}
-                   className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-sm whitespace-nowrap shrink-0"
-                 >
-                   <Download size={16} />
-                   <span>儲存圖片</span>
-                 </motion.button>
-               </div>
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsPaymentOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                    title="臨打收費與會員管理"
+                  >
+                    <Wallet size={15} />
+                    <span>收費記錄</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsCombinationsOpen(true)}
+                    className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                    title="當次比賽對戰與搭檔組合表"
+                  >
+                    <Users size={15} />
+                    <span>搭檔對戰</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setTargetWaitPlayerId(undefined);
+                      setIsWaitAnalysisOpen(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                    title="選手下場等待場次分析"
+                  >
+                    <Clock size={15} />
+                    <span>等待分析</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsAvoidModalOpen(true)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                    title="設定不想一起打球的選手（同場迴避）"
+                  >
+                    <UserX size={15} />
+                    <span>同場迴避 {avoidPairs.length > 0 && `(${avoidPairs.length})`}</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setAutoVoiceEnabled(!autoVoiceEnabled)}
+                    className={`px-3.5 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0 shadow-sm ${
+                      autoVoiceEnabled
+                        ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-400 border border-pink-200 dark:border-pink-800'
+                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                    }`}
+                    title="自動語音播報設定"
+                  >
+                    {autoVoiceEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                    <span>語音: {autoVoiceEnabled ? '開' : '關'}</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={toggleFullscreen}
+                    className="bg-slate-800 text-white dark:bg-emerald-500 dark:text-white px-4 py-2 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                  >
+                    <Maximize size={15} />
+                    <span>全螢幕展示</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleExport}
+                    className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
+                  >
+                    <Download size={15} />
+                    <span>儲存圖片</span>
+                  </motion.button>
+                </div>
            </div>
 
            <div className="rounded-[2rem] bg-white dark:bg-slate-800 shadow-sm border border-slate-200/60 dark:border-slate-700/60 overflow-hidden relative">
@@ -646,9 +736,30 @@ const MatchResults: React.FC = () => {
 
                     {/* Stats */}
                     <div className={`${waitingPlayers.length === 0 ? 'lg:col-span-2' : ''} bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-700`}>
-                      <h4 className="text-emerald-600 dark:text-emerald-400 font-black mb-4 flex items-center gap-2 uppercase tracking-wide text-sm">
-                         <BarChart3 size={16} /> 出賽統計 / Stats
-                      </h4>
+                      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <h4 className="text-emerald-600 dark:text-emerald-400 font-black flex items-center gap-2 uppercase tracking-wide text-sm">
+                           <BarChart3 size={16} /> 出賽統計 / Stats
+                        </h4>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setIsCombinationsOpen(true)}
+                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                          >
+                            <Users size={12} />
+                            <span>搭檔對戰表</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTargetWaitPlayerId(undefined);
+                              setIsWaitAnalysisOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                          >
+                            <Clock size={12} />
+                            <span>等待分析</span>
+                          </button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                          {players.filter(p => {
                              if (scheduleType === MatchType.MENS_DOUBLES) return p.gender === Gender.MALE;
@@ -660,6 +771,18 @@ const MatchResults: React.FC = () => {
                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">{p.name}</span>
                                 <Pencil size={11} className="opacity-0 group-hover:opacity-100 text-slate-400 shrink-0" />
                               </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTargetWaitPlayerId(p.id);
+                                    setIsWaitAnalysisOpen(true);
+                                  }}
+                                  title={`查看【${p.name}】下場等待場次分析`}
+                                  className="p-1 text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded transition-colors"
+                                >
+                                  <Clock size={12} />
+                                </button>
                               <span className={`shrink-0 text-xs font-black min-w-6 text-center py-0.5 rounded-md ${getPlayerMatchCount(p.id) === 0 ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400'}`}>
                                  {getPlayerMatchCount(p.id)}
                               </span>
@@ -874,6 +997,23 @@ const MatchResults: React.FC = () => {
       )}
       </AnimatePresence>
       {renderSwapModal()}
+      <PaymentManagerModal
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+      />
+      <MatchCombinationsModal
+        isOpen={isCombinationsOpen}
+        onClose={() => setIsCombinationsOpen(false)}
+      />
+      <PlayerWaitAnalysisModal
+        isOpen={isWaitAnalysisOpen}
+        onClose={() => setIsWaitAnalysisOpen(false)}
+        initialPlayerId={targetWaitPlayerId}
+      />
+      <AvoidPlayersModal
+        isOpen={isAvoidModalOpen}
+        onClose={() => setIsAvoidModalOpen(false)}
+      />
       <EditPlayerModal
         isOpen={!!editingPlayer}
         player={editingPlayer}

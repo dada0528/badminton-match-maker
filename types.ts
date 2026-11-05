@@ -10,6 +10,7 @@ export type SkillMode = 'BALANCED' | 'STRONG_WEAK';
 export interface HistoryPlayer {
   name: string;
   gender: Gender;
+  isMember?: boolean; // 會員 (true) / 臨打 (false)
 }
 
 export interface Club {
@@ -24,7 +25,9 @@ export interface Club {
   courtNames?: string[];
   rounds?: number;
   paidPlayerIds?: string[];
+  memberPlayerNames?: string[];
   fixedPairs?: Array<[string, string]>;
+  avoidPairs?: Array<[string, string]>;
   firstMatchPlayerIds?: string[];
   createdAt?: number;
   freeGender?: boolean;
@@ -38,6 +41,7 @@ export interface Player {
   createdAt?: number;
   status?: PlayerStatus;
   missedPlaysOffset?: number;
+  isMember?: boolean; // 會員 (true) / 臨打 (false)
 }
 
 export interface Team {

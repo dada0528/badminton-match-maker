@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Calculator, Moon, Sun, Star, BookOpen, Wallet, Shield, ChevronDown } from 'lucide-react';
+import { Calculator, Moon, Sun, Star, BookOpen, Wallet, Shield, ChevronDown, Users, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import FeeCalculatorModal from './FeeCalculatorModal';
 import PaymentManagerModal from './PaymentManagerModal';
+import MatchCombinationsModal from './MatchCombinationsModal';
+import PlayerWaitAnalysisModal from './PlayerWaitAnalysisModal';
 import InfoModal from './InfoModal';
 import ClubManagerModal from './ClubManagerModal';
 import { useStore } from '../store/useStore';
@@ -28,6 +30,8 @@ const BadmintonIcon = () => (
 const Header: React.FC = () => {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [isPaymentManagerOpen, setIsPaymentManagerOpen] = useState(false);
+  const [isCombinationsOpen, setIsCombinationsOpen] = useState(false);
+  const [isWaitAnalysisOpen, setIsWaitAnalysisOpen] = useState(false);
   const [isClubManagerOpen, setIsClubManagerOpen] = useState(false);
   const [infoModal, setInfoModal] = useState<{ isOpen: boolean; type: 'features' | 'guide' }>({
     isOpen: false,
@@ -99,15 +103,15 @@ const Header: React.FC = () => {
           {/* Bottom Row: Action Buttons Section */}
           <div className="flex flex-row flex-nowrap overflow-x-auto hide-scrollbar items-center gap-2 sm:gap-3 w-full pb-1 mask-linear-fade">
             
-            {/* Money Management Buttons */}
+            {/* Money & Match Analysis Buttons */}
             <div className="flex bg-slate-100/80 dark:bg-slate-800/80 rounded-xl p-1 border border-slate-200 dark:border-slate-700/50 shadow-inner shrink-0">
               <motion.button 
                 whileHover={{ backgroundColor: 'white', scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsCalculatorOpen(true)}
-                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-4 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
+                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-3.5 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
               >
-                <Calculator size={16} className="sm:w-4 sm:h-4 shrink-0" />
+                <Calculator size={15} className="shrink-0" />
                 <span className="whitespace-nowrap shrink-0">算錢</span>
               </motion.button>
               <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5 my-1"></div>
@@ -115,10 +119,32 @@ const Header: React.FC = () => {
                 whileHover={{ backgroundColor: 'white', scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsPaymentManagerOpen(true)}
-                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-4 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
+                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-3.5 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
               >
-                <Wallet size={16} className="sm:w-4 sm:h-4 shrink-0" />
+                <Wallet size={15} className="shrink-0" />
                 <span className="whitespace-nowrap shrink-0">收費管理</span>
+              </motion.button>
+              <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5 my-1"></div>
+              <motion.button 
+                whileHover={{ backgroundColor: 'white', scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsCombinationsOpen(true)}
+                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-3.5 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
+                title="查看當次比賽對戰與搭檔組合表"
+              >
+                <Users size={15} className="shrink-0" />
+                <span className="whitespace-nowrap shrink-0">搭檔對戰</span>
+              </motion.button>
+              <div className="w-px bg-slate-200 dark:bg-slate-700 mx-0.5 my-1"></div>
+              <motion.button 
+                whileHover={{ backgroundColor: 'white', scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsWaitAnalysisOpen(true)}
+                className="flex items-center justify-center flex-nowrap gap-1.5 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 dark:hover:bg-slate-700 px-3 py-2 sm:px-3.5 sm:py-2 rounded-lg transition-all whitespace-nowrap shrink-0"
+                title="查詢選手下場等待場次分析"
+              >
+                <Clock size={15} className="shrink-0" />
+                <span className="whitespace-nowrap shrink-0">等待分析</span>
               </motion.button>
             </div>
 
@@ -149,6 +175,8 @@ const Header: React.FC = () => {
       </header>
       <FeeCalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
       <PaymentManagerModal isOpen={isPaymentManagerOpen} onClose={() => setIsPaymentManagerOpen(false)} />
+      <MatchCombinationsModal isOpen={isCombinationsOpen} onClose={() => setIsCombinationsOpen(false)} />
+      <PlayerWaitAnalysisModal isOpen={isWaitAnalysisOpen} onClose={() => setIsWaitAnalysisOpen(false)} />
       <ClubManagerModal isOpen={isClubManagerOpen} onClose={() => setIsClubManagerOpen(false)} />
       <InfoModal 
         isOpen={infoModal.isOpen} 

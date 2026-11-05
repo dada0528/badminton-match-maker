@@ -13,6 +13,7 @@ interface EditPlayerModalProps {
     gender: Gender;
     level?: number;
     status?: string;
+    isMember?: boolean;
   } | null;
   isHistoryOnly?: boolean;
   onSaveSuccess?: () => void;
@@ -25,18 +26,25 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({
   isHistoryOnly = false,
   onSaveSuccess
 }) => {
-  const { updatePlayer, updateHistoryPlayer } = useStore();
+  const { updatePlayer, updateHistoryPlayer, history, clubs, currentClubId } = useStore();
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>(Gender.MALE);
+  const [isMember, setIsMember] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (player && isOpen) {
       setName(player.name || '');
       setGender(player.gender || Gender.MALE);
+      const currClub = clubs.find(c => c.id === currentClubId);
+      const hist = history.find(h => h.name.trim().toLowerCase() === (player.name || '').trim().toLowerCase());
+      const memberStatus = player.isMember !== undefined 
+        ? player.isMember 
+        : Boolean(hist?.isMember || currClub?.memberPlayerNames?.includes(player.name?.trim()));
+      setIsMember(memberStatus);
       setError(null);
     }
-  }, [player, isOpen]);
+  }, [player, isOpen, history, clubs, currentClubId]);
 
   // Handle ESC key
   useEffect(() => {
@@ -61,9 +69,9 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({
 
     let success = false;
     if (player.id && !isHistoryOnly) {
-      success = updatePlayer(player.id, trimmed, gender);
+      success = updatePlayer(player.id, trimmed, gender, isMember);
     } else {
-      success = updateHistoryPlayer(player.name, trimmed, gender);
+      success = updateHistoryPlayer(player.name, trimmed, gender, isMember);
     }
 
     if (success) {
@@ -179,6 +187,49 @@ export const EditPlayerModal: React.FC<EditPlayerModalProps> = ({
                   <span className="text-xl">👧</span>
                   <span className="text-sm">女生 (Female)</span>
                   {gender === Gender.FEMALE && <Check size={16} className="text-pink-600 dark:text-pink-400 ml-1" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Membership Selection (會員 vs 臨打) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span>球員身分別 (影響收費)</span>
+                <span className="text-[11px] font-normal text-slate-400">下次排點自動記憶</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsMember(true)}
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-bold border-2 transition-all active:scale-95 ${
+                    isMember
+                      ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-purple-950/60 dark:border-purple-500 dark:text-purple-300 shadow-sm ring-2 ring-purple-500/20'
+                      : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-purple-300'
+                  }`}
+                >
+                  <span className="text-base">👑</span>
+                  <div className="text-left">
+                    <div className="text-xs font-black">正式會員</div>
+                    <div className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">免當次收費</div>
+                  </div>
+                  {isMember && <Check size={16} className="text-purple-600 dark:text-purple-400 ml-auto" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMember(false)}
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl font-bold border-2 transition-all active:scale-95 ${
+                    !isMember
+                      ? 'bg-amber-50 border-amber-500 text-amber-700 dark:bg-amber-950/60 dark:border-amber-500 dark:text-amber-300 shadow-sm ring-2 ring-amber-500/20'
+                      : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-amber-300'
+                  }`}
+                >
+                  <span className="text-base">🏸</span>
+                  <div className="text-left">
+                    <div className="text-xs font-black">臨打球友</div>
+                    <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">需當次收費</div>
+                  </div>
+                  {!isMember && <Check size={16} className="text-amber-600 dark:text-amber-400 ml-auto" />}
                 </button>
               </div>
             </div>

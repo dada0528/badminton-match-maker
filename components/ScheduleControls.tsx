@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ListOrdered, Shuffle, Calendar, CheckCircle2, Circle, Shield, Link2, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ListOrdered, Shuffle, Calendar, CheckCircle2, Circle, Shield, Link2, X, Settings2, ChevronDown, ChevronUp, UserX } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MatchType, ScheduleItem } from '../types';
 import { useStore } from '../store/useStore';
 import { generateSchedule, generateNextMatch, generateNextMatchesGroup } from '../services/matchService';
+import AvoidPlayersModal from './AvoidPlayersModal';
 
 const ControlToggle = ({ active, onClick, icon: Icon, label, title, colorClass }: any) => (
   <motion.button 
@@ -50,6 +51,8 @@ const ScheduleControls: React.FC = () => {
     setFirstMatchPlayerIds,
     addFixedPair,
     removeFixedPair,
+    avoidPairs,
+    removeAvoidPair,
     activeMatches,
     clearMatchHistory
   } = useStore();
@@ -58,6 +61,7 @@ const ScheduleControls: React.FC = () => {
   const [isFullScheduleMode, setIsFullScheduleMode] = useState<boolean>(false);
   const [isFirstMatchPlayersOpen, setIsFirstMatchPlayersOpen] = useState<boolean>(false);
   const [isFixedPairsOpen, setIsFixedPairsOpen] = useState<boolean>(false);
+  const [isAvoidModalOpen, setIsAvoidModalOpen] = useState<boolean>(false);
 
   const handleGenerateSchedule = (type: MatchType) => {
     setErrorMsg(null);
@@ -69,7 +73,7 @@ const ScheduleControls: React.FC = () => {
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
     
     const result = generateNextMatchesGroup(
-        players, [], [], mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, courtCount, 1, validFirstMatchIds, skillMode, 1, freeGender
+        players, [], [], mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, courtCount, 1, validFirstMatchIds, skillMode, 1, freeGender, avoidPairs
     );
 
     if (result.error) {
@@ -104,7 +108,7 @@ const ScheduleControls: React.FC = () => {
 
     const validFirstMatchIds = firstMatchPlayerIds.filter(id => players.some(p => p.id === id));
     const result = generateSchedule(
-        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs, skillMode, freeGender
+        players, rounds, mixPartners, avoidGenderSkew, type, 1, validFirstMatchIds, enableSkillLevel, fixedPairs, skillMode, freeGender, avoidPairs
     );
 
     if (result.error) {
@@ -422,6 +426,58 @@ const ScheduleControls: React.FC = () => {
                 </div>
               )}
             </div>
+            {/* Avoid Players (同場迴避名單) */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                  <UserX size={16} className="text-rose-500" /> 同場迴避 (不想跟誰打)
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold bg-white dark:bg-slate-800 px-2.5 py-1 rounded-full shadow-sm text-slate-500">
+                    {avoidPairs.length} 組迴避
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAvoidModalOpen(true)}
+                    className="px-3 py-1 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                  >
+                    設定名單
+                  </button>
+                </div>
+              </div>
+
+              {avoidPairs.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 max-h-[140px] overflow-y-auto pr-1">
+                  {avoidPairs.map(([p1Id, p2Id], idx) => {
+                    const p1 = players.find(p => p.id === p1Id);
+                    const p2 = players.find(p => p.id === p2Id);
+                    if (!p1 || !p2) return null;
+                    return (
+                      <div 
+                        key={idx} 
+                        className="flex items-center gap-1.5 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl px-2.5 py-1 text-xs font-bold text-rose-800 dark:text-rose-300 shadow-xs"
+                      >
+                        <span>{p1.name}</span>
+                        <span className="text-rose-400 dark:text-rose-500 text-[10px]">✕ 不碰</span>
+                        <span>{p2.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAvoidPair(p1Id, p2Id)}
+                          className="ml-1 text-rose-400 hover:text-rose-700 dark:hover:text-rose-200 p-0.5 rounded transition-colors"
+                          title="移除此組迴避"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                  設定後，被選到的人保證絕不同場（搭檔與對戰皆嚴格迴避）。
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -447,6 +503,11 @@ const ScheduleControls: React.FC = () => {
                </motion.button>
             </div>
         </div>
+
+        <AvoidPlayersModal
+          isOpen={isAvoidModalOpen}
+          onClose={() => setIsAvoidModalOpen(false)}
+        />
     </section>
   );
 };

@@ -7,6 +7,7 @@ import ImportModal from './ImportModal';
 import { ShareGroupModal } from './ShareGroupModal';
 import ClubManagerModal from './ClubManagerModal';
 import EditPlayerModal from './EditPlayerModal';
+import AvoidPlayersModal from './AvoidPlayersModal';
 import { useStore } from '../store/useStore';
 
 const PlayerListItem: React.FC<{ 
@@ -14,18 +15,23 @@ const PlayerListItem: React.FC<{
   enableSkillLevel: boolean, 
   onUpdateLevel: (id: string, level: number) => void, 
   onToggleStatus: (id: string) => void, 
+  onToggleMember: (id: string) => void,
   onRemove: (id: string) => void,
-  onEdit: (player: Player) => void
+  onEdit: (player: Player) => void,
+  onOpenAvoid?: (playerId: string) => void
 }> = ({ 
   player, 
   enableSkillLevel, 
   onUpdateLevel, 
   onToggleStatus, 
+  onToggleMember,
   onRemove,
-  onEdit
+  onEdit,
+  onOpenAvoid
 }) => {
   const isMale = player.gender === Gender.MALE;
   const isSuspended = player.status === 'SUSPENDED';
+  const isMember = Boolean(player.isMember);
   const level = player.level || 3;
 
   return (
@@ -43,12 +49,40 @@ const PlayerListItem: React.FC<{
       <div 
         onClick={() => onEdit(player)}
         title="點擊修改選手姓名與性別"
-        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer group/name select-none"
+        className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer group/name select-none"
       >
         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isSuspended ? 'bg-slate-300 dark:bg-slate-600' : isMale ? 'bg-blue-400' : 'bg-pink-400'}`} />
         <span className={`font-bold truncate text-sm sm:text-base group-hover/name:text-emerald-600 dark:group-hover/name:text-emerald-400 group-hover/name:underline transition-colors ${isSuspended ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
           {player.name}
         </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleMember(player.id);
+          }}
+          title={isMember ? '【會員】固定季繳/免當次收費 (點擊切換為臨打)' : '【臨打】需當次收費 (點擊切換為會員)'}
+          className={`text-[10px] sm:text-xs font-black px-1.5 py-0.5 rounded-md transition-all shrink-0 flex items-center gap-0.5 ${
+            isMember
+              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-300/60 dark:border-purple-700'
+              : 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700'
+          }`}
+        >
+          <span>{isMember ? '👑 會員' : '臨打'}</span>
+        </button>
+        {player.avoidPlayerIds && player.avoidPlayerIds.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenAvoid?.(player.id);
+            }}
+            title={`【避開名單】已設定避開 ${player.avoidPlayerIds.length} 人，點擊編輯`}
+            className="text-[10px] sm:text-xs font-black px-1.5 py-0.5 rounded-md transition-all shrink-0 flex items-center gap-0.5 bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-300 border border-rose-300/60 dark:border-rose-700"
+          >
+            <span>🚫 避開{player.avoidPlayerIds.length}人</span>
+          </button>
+        )}
         <span className="opacity-0 group-hover/name:opacity-100 text-slate-400 hover:text-emerald-500 transition-opacity p-0.5">
           <Pencil size={12} strokeWidth={2.5} />
         </span>
@@ -57,7 +91,7 @@ const PlayerListItem: React.FC<{
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <button 
           onClick={() => onEdit(player)} 
-          title="修改姓名與性別" 
+          title="修改姓名、性別與會員身分" 
           className="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/30 transition-colors"
         >
           <Pencil size={14} strokeWidth={2.5} />
@@ -87,6 +121,7 @@ const PlayerInputSection: React.FC = () => {
     addPlayer, 
     removePlayer, 
     togglePlayerStatus,
+    togglePlayerMember,
     clearPlayers, 
     addToHistory,
     removeFromHistory,
@@ -106,6 +141,8 @@ const PlayerInputSection: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isClubManagerOpen, setIsClubManagerOpen] = useState(false);
+  const [isAvoidModalOpen, setIsAvoidModalOpen] = useState(false);
+  const [avoidDefaultPlayerId, setAvoidDefaultPlayerId] = useState<string | undefined>(undefined);
   const [editingPlayer, setEditingPlayer] = useState<Player | { name: string; gender: Gender } | null>(null);
 
   const currentClub = clubs.find(c => c.id === currentClubId) || clubs[0];
@@ -179,6 +216,7 @@ const PlayerInputSection: React.FC = () => {
           id: Date.now().toString() + '-' + index + '-' + Math.random().toString().substring(2, 7),
           name: h.name,
           gender: h.gender,
+          isMember: Boolean(h.isMember),
         });
       }
     });
@@ -196,12 +234,15 @@ const PlayerInputSection: React.FC = () => {
     
     newPlayers.forEach((p, index) => {
       if (!players.some(existing => existing.name === p.name)) {
+        const histItem = history.find(h => h.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+        const isMem = Boolean(histItem?.isMember || currentClub?.memberPlayerNames?.includes(p.name.trim()));
         playersToAdd.push({
           id: Date.now().toString() + '-batch-' + index + '-' + Math.random().toString().substring(2, 7),
           name: p.name,
           gender: p.gender,
+          isMember: isMem,
         });
-        addToHistory(p.name, p.gender);
+        addToHistory(p.name, p.gender, isMem);
       }
     });
 
@@ -406,7 +447,7 @@ const PlayerInputSection: React.FC = () => {
                     `}
                   >
                     <button
-                      onClick={() => !isActive && addPlayer(h.name, h.gender)}
+                      onClick={() => !isActive && addPlayer(h.name, h.gender, h.isMember)}
                       disabled={isActive}
                       className={`
                         px-3 py-1.5 text-sm font-bold outline-none flex items-center gap-1.5
@@ -418,6 +459,9 @@ const PlayerInputSection: React.FC = () => {
                     >
                       <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-slate-300' : h.gender === Gender.MALE ? 'bg-blue-500' : 'bg-pink-500'}`}></div>
                       {h.name}
+                      {h.isMember && (
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-extrabold ml-0.5" title="會員 (免當次收費)">👑</span>
+                      )}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingPlayer({ name: h.name, gender: h.gender }); }}
@@ -639,6 +683,7 @@ const PlayerInputSection: React.FC = () => {
                         enableSkillLevel={enableSkillLevel}
                         onUpdateLevel={updatePlayerLevel}
                         onToggleStatus={togglePlayerStatus}
+                        onToggleMember={togglePlayerMember}
                         onRemove={removePlayer}
                         onEdit={setEditingPlayer}
                       />
@@ -676,6 +721,7 @@ const PlayerInputSection: React.FC = () => {
                         enableSkillLevel={enableSkillLevel}
                         onUpdateLevel={updatePlayerLevel}
                         onToggleStatus={togglePlayerStatus}
+                        onToggleMember={togglePlayerMember}
                         onRemove={removePlayer}
                         onEdit={setEditingPlayer}
                       />

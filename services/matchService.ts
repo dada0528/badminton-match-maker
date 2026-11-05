@@ -49,16 +49,16 @@ const calculateCandidateScore = (s: PlayerStats, addNoise: boolean = true): numb
   else if (s.consecutivePlays === 2) score += 8000000; // 2 matches in a row -> heavy penalty
   else if (s.consecutivePlays === 1) score += 500000;  // 1 match in a row -> mild penalty
   
-  // Rest rewards (prioritize rested players)
-  if (s.consecutiveRests >= 2) score -= 3000000 * s.consecutiveRests;
-  else if (s.consecutiveRests === 1) score -= 1500000;
+  // Rest rewards (prioritize rested players; hard rule: rested 2+ rounds MUST play in 3rd round)
+  if (s.consecutiveRests >= 2) score -= 500000000 + (s.consecutiveRests * 50000000);
+  else if (s.consecutiveRests === 1) score -= 2000000;
   
   score -= (s.consecutiveRestTwiceCount || 0) * 50000;
   if (addNoise) score += Math.random() * 500;
   return score; 
 };
 
-const groupMatchesIntoRounds = (matches: ScheduleItem[], maxCourts: number): ScheduleItem[][] => {
+export const groupMatchesIntoRounds = (matches: ScheduleItem[], maxCourts: number): ScheduleItem[][] => {
   const rounds: ScheduleItem[][] = [];
   let currentRound: ScheduleItem[] = [];
   let currentRoundPlayers = new Set<string>();
@@ -111,8 +111,28 @@ export const generateNextMatchesGroup = (
   firstMatchPlayerIds: string[] = [],
   skillMode: SkillMode = 'BALANCED',
   startSequence: number = 1,
-  freeGender: boolean = false
+  freeGender: boolean = false,
+  avoidPairs: Array<[string, string]> = []
 ): { matches: ScheduleItem[], error: string | null, notice?: string | null } => {
+
+  const avoidSet = new Set<string>();
+  avoidPairs.forEach(([id1, id2]) => {
+    if (id1 && id2 && id1 !== id2) {
+      avoidSet.add([id1, id2].sort().join('-'));
+    }
+  });
+
+  const checkHasAvoidConflict = (ids: string[]): boolean => {
+    if (avoidSet.size === 0) return false;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        if (avoidSet.has([ids[i], ids[j]].sort().join('-'))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
 
   let pool = [...allPlayers].filter(p => p.status !== 'SUSPENDED');
   if (!freeGender) {
@@ -365,6 +385,7 @@ export const generateNextMatchesGroup = (
       const forcedStats = availableStats.filter(s => firstMatchPlayerIds.includes(s.player.id));
       if (forcedStats.length === 4) {
           let isValid = true;
+          if (checkHasAvoidConflict(firstMatchPlayerIds)) isValid = false;
           if (type === MatchType.MIXED_DOUBLES && courtTypes[0] === MatchType.MIXED_DOUBLES) {
               const m = forcedStats.filter(s => s.player.gender === Gender.MALE).length;
               const f = forcedStats.filter(s => s.player.gender === Gender.FEMALE).length;
@@ -530,6 +551,12 @@ export const generateNextMatchesGroup = (
           if (anyPresent && !inT1 && !inT2) penalty += 10000000; 
       });
 
+      // Avoid pairs enforcement: strictly forbid avoid pairs on the same court (neither partners nor opponents)
+      const curCourtIds = [t1[0].player.id, t1[1].player.id, t2[0].player.id, t2[1].player.id];
+      if (checkHasAvoidConflict(curCourtIds)) {
+          penalty += 1000000000000; // 1 Trillion: 100% eliminate avoid pairs sharing court
+      }
+
       // Gender composition check & skew avoidance
       const t1M = t1.filter(p => p.player.gender === Gender.MALE).length;
       const t2M = t2.filter(p => p.player.gender === Gender.MALE).length;
@@ -628,9 +655,10 @@ export const generateNextMatchesGroup = (
          const mandM = candidatePoolM.filter(isMandatory);
          const mandF = candidatePoolF.filter(isMandatory);
 
-         // Take at most 1 mandatory player per court to prevent locking past matches into rigid blocks
-         const takeMandM = Math.min(targetCourts, mandM.length);
-         const takeMandF = Math.min(targetCourts, mandF.length);
+         // Hard rule: Anyone who has rested 2+ rounds MUST play in the 3rd round.
+         // Include as many mandatory players as available capacity allows.
+         const takeMandM = Math.min(mNeeded, mandM.length);
+         const takeMandF = Math.min(fNeeded, mandF.length);
 
          const pickedMandM = shuffle(mandM).slice(0, takeMandM);
          const pickedMandF = shuffle(mandF).slice(0, takeMandF);
@@ -643,8 +671,8 @@ export const generateNextMatchesGroup = (
          sampledPool = [...selectedM, ...selectedF];
      } else {
          const mand = candidatePoolAll.filter(isMandatory);
-         // Take at most 2 mandatory players per court to avoid clustering exact 4 players from same past match
-         const takeMand = Math.min(targetCourts * 2, mand.length);
+         // Take all mandatory players up to total court capacity (neededTotal)
+         const takeMand = Math.min(neededTotal, mand.length);
          const pickedMand = shuffle(mand).slice(0, takeMand);
          const remAll = candidatePoolAll.filter(s => !pickedMand.includes(s));
          const neededRemaining = Math.max(0, neededTotal - pickedMand.length);
@@ -745,14 +773,36 @@ export const generateNextMatchesGroup = (
          }
      }
      
+     // Hard penalty if any mandatory player present in sampledPool was omitted
+     if (matches.length === targetCourts) {
+         const assignedIds = new Set<string>();
+         matches.forEach(m => {
+             m.t1.forEach(s => assignedIds.add(s.player.id));
+             m.t2.forEach(s => assignedIds.add(s.player.id));
+         });
+         const mandatoryInSample = sampledPool.filter(isMandatory);
+         const omittedCount = mandatoryInSample.filter(s => !assignedIds.has(s.player.id)).length;
+         if (omittedCount > 0) {
+             cost += omittedCount * 20000000000;
+         }
+     }
+
      if (matches.length === targetCourts && cost < bestCost) {
          bestCost = cost;
          bestMatches = matches;
      }
   }
 
-  if (bestMatches.length === 0) {
-      return { matches: [], error: '無法分配符合條件的組合，請檢查場地與性別設定' };
+  if (bestMatches.length === 0 || bestCost >= 500000000000) {
+      return { matches: [], error: '無法分配符合條件的組合，請檢查場地、性別或不想同場名單之設定' };
+  }
+
+  // Strict guarantee: No avoid conflict on any court (neither partners nor opponents)
+  for (const m of bestMatches) {
+      const courtIds = [m.t1[0].player.id, m.t1[1].player.id, m.t2[0].player.id, m.t2[1].player.id];
+      if (checkHasAvoidConflict(courtIds)) {
+          return { matches: [], error: '排程限制衝突：設定之「不想同場球員」無法排進目前的場地人數，請放寬迴避名單或增加可用選手' };
+      }
   }
 
   const generatedMatches: ScheduleItem[] = [];
@@ -793,10 +843,11 @@ export const generateNextMatch = (
   courtNumber: number = 1,
   firstMatchPlayerIds: string[] = [],
   skillMode: SkillMode = 'BALANCED',
-  freeGender: boolean = false
+  freeGender: boolean = false,
+  avoidPairs: Array<[string, string]> = []
 ): { match: ScheduleItem | null, error: string | null, notice?: string | null } => {
     const result = generateNextMatchesGroup(
-        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1, freeGender
+        allPlayers, matchHistory, activeMatches, mixPartners, avoidGenderSkew, type, enableSkillLevel, fixedPairs, 1, courtNumber, firstMatchPlayerIds, skillMode, 1, freeGender, avoidPairs
     );
     if (result.error || result.matches.length === 0) return { match: null, error: result.error, notice: result.notice };
     return { match: result.matches[0], error: null, notice: result.notice };
@@ -813,7 +864,8 @@ export const generateSchedule = (
   enableSkillLevel: boolean = false, 
   fixedPairs: Array<[string, string]> = [], 
   skillMode: SkillMode = 'BALANCED',
-  freeGender: boolean = false
+  freeGender: boolean = false,
+  avoidPairs: Array<[string, string]> = []
 ): { schedule: ScheduleItem[], error: string | null, notice?: string | null } => {
 
   const schedule: ScheduleItem[] = [];
@@ -843,7 +895,8 @@ export const generateSchedule = (
           roundNumber === 1 ? firstMatchPlayerIds : [],
           skillMode,
           currentMatchCount + 1,
-          freeGender
+          freeGender,
+          avoidPairs
       );
 
       if (result.error) return { schedule: [], error: result.error };
