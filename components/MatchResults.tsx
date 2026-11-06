@@ -501,83 +501,125 @@ const MatchResults: React.FC = () => {
                    <div className="h-0.5 w-12 bg-emerald-200 dark:bg-emerald-800 rounded-full hidden sm:block"></div>
                </div>
                
-               <div className="flex flex-row flex-nowrap items-center justify-center gap-2 w-full overflow-x-auto hide-scrollbar pb-1">
-                 <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsPaymentOpen(true)}
-                    className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                    title="臨打收費與會員管理"
-                  >
-                    <Wallet size={15} />
-                    <span>收費記錄</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsCombinationsOpen(true)}
-                    className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                    title="當次比賽對戰與搭檔組合表"
-                  >
-                    <Users size={15} />
-                    <span>搭檔對戰</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      setTargetWaitPlayerId(undefined);
-                      setIsWaitAnalysisOpen(true);
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                    title="選手下場等待場次分析"
-                  >
-                    <Clock size={15} />
-                    <span>等待分析</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsAvoidModalOpen(true)}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                    title="設定不想一起打球的選手（同場迴避）"
-                  >
-                    <UserX size={15} />
-                    <span>同場迴避 {avoidPairs.length > 0 && `(${avoidPairs.length})`}</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setAutoVoiceEnabled(!autoVoiceEnabled)}
-                    className={`px-3.5 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0 shadow-sm ${
-                      autoVoiceEnabled
-                        ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-400 border border-pink-200 dark:border-pink-800'
-                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                    }`}
-                    title="自動語音播報設定"
-                  >
-                    {autoVoiceEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-                    <span>語音: {autoVoiceEnabled ? '開' : '關'}</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={toggleFullscreen}
-                    className="bg-slate-800 text-white dark:bg-emerald-500 dark:text-white px-4 py-2 rounded-xl font-bold shadow-md transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                  >
-                    <Maximize size={15} />
-                    <span>全螢幕展示</span>
-                  </motion.button>
-                  <motion.button 
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleExport}
-                    className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap shrink-0"
-                  >
-                    <Download size={15} />
-                    <span>儲存圖片</span>
-                  </motion.button>
-                </div>
+               {/* All-in-one Function Dashboard (Zero horizontal scroll, fits all screens) */}
+               <div className="w-full max-w-4xl mx-auto px-1 sm:px-0">
+                 <div className="bg-slate-50/90 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl sm:rounded-3xl p-2 sm:p-3 border border-slate-200/90 dark:border-slate-700/80 shadow-xs space-y-2">
+                   {/* Row 1: 4 Core Management & Analysis Tools (Equal 4-column grid) */}
+                   <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+                     {/* 收費記錄 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => setIsPaymentOpen(true)}
+                       className="bg-amber-500 hover:bg-amber-600 text-white p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center min-h-[46px] cursor-pointer"
+                       title="臨打收費與會員管理"
+                     >
+                       <Wallet size={16} className="shrink-0 text-amber-100 sm:text-white" />
+                       <span className="text-[11px] sm:text-xs tracking-tight">收費記錄</span>
+                     </motion.button>
+
+                     {/* 搭檔對戰 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => setIsCombinationsOpen(true)}
+                       className="bg-teal-600 hover:bg-teal-700 text-white p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center min-h-[46px] cursor-pointer"
+                       title="當次比賽對戰與搭檔組合表"
+                     >
+                       <Users size={16} className="shrink-0 text-teal-100 sm:text-white" />
+                       <span className="text-[11px] sm:text-xs tracking-tight">搭檔對戰</span>
+                     </motion.button>
+
+                     {/* 等待分析 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => {
+                         setTargetWaitPlayerId(undefined);
+                         setIsWaitAnalysisOpen(true);
+                       }}
+                       className="bg-blue-600 hover:bg-blue-700 text-white p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center min-h-[46px] cursor-pointer"
+                       title="選手下場等待場次分析"
+                     >
+                       <Clock size={16} className="shrink-0 text-blue-100 sm:text-white" />
+                       <span className="text-[11px] sm:text-xs tracking-tight">等待分析</span>
+                     </motion.button>
+
+                     {/* 同場迴避 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => setIsAvoidModalOpen(true)}
+                       className="bg-rose-600 hover:bg-rose-700 text-white p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-center relative min-h-[46px] cursor-pointer"
+                       title="設定不想一起打球的選手（同場迴避）"
+                     >
+                       <div className="relative">
+                         <UserX size={16} className="shrink-0 text-rose-100 sm:text-white" />
+                         {avoidPairs.length > 0 && (
+                           <span className="sm:hidden absolute -top-1.5 -right-2.5 bg-white text-rose-700 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                             {avoidPairs.length}
+                           </span>
+                         )}
+                       </div>
+                       <div className="flex items-center gap-1">
+                         <span className="text-[11px] sm:text-xs tracking-tight">同場迴避</span>
+                         {avoidPairs.length > 0 && (
+                           <span className="hidden sm:inline-block bg-white/25 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                             {avoidPairs.length}
+                           </span>
+                         )}
+                       </div>
+                     </motion.button>
+                   </div>
+
+                   {/* Row 2: 3 Board Display & Media Actions (Equal 3-column grid) */}
+                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
+                     {/* 語音播報 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={() => setAutoVoiceEnabled(!autoVoiceEnabled)}
+                       className={`p-2 sm:py-2.5 sm:px-3 rounded-xl font-black transition-all flex items-center justify-center gap-1.5 text-xs sm:text-xs shadow-xs min-h-[42px] border cursor-pointer ${
+                         autoVoiceEnabled
+                           ? "bg-pink-100 dark:bg-pink-900/60 text-pink-700 dark:text-pink-300 border-pink-300 dark:border-pink-800"
+                           : "bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-650"
+                       }`}
+                       title="自動語音播報設定"
+                     >
+                       {autoVoiceEnabled ? (
+                         <Volume2 size={16} className="text-pink-600 dark:text-pink-400 shrink-0" />
+                       ) : (
+                         <VolumeX size={16} className="text-slate-400 shrink-0" />
+                       )}
+                       <span className="tracking-tight">{autoVoiceEnabled ? "語音：開" : "語音：關"}</span>
+                     </motion.button>
+
+                     {/* 全螢幕展示 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={toggleFullscreen}
+                       className="bg-slate-800 hover:bg-slate-900 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex items-center justify-center gap-1.5 text-xs sm:text-xs min-h-[42px] cursor-pointer"
+                       title="切換為大螢幕全螢幕看板展示"
+                     >
+                       <Maximize size={15} className="shrink-0" />
+                       <span className="tracking-tight">全螢幕展示</span>
+                     </motion.button>
+
+                     {/* 儲存圖片 */}
+                     <motion.button 
+                       whileHover={{ scale: 1.02 }}
+                       whileTap={{ scale: 0.96 }}
+                       onClick={handleExport}
+                       className="bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-700 p-2 sm:py-2.5 sm:px-3 rounded-xl font-black shadow-xs transition-all flex items-center justify-center gap-1.5 text-xs sm:text-xs min-h-[42px] cursor-pointer"
+                       title="將賽程與看板儲存為完整長圖"
+                     >
+                       <Download size={15} className="shrink-0 text-slate-500 dark:text-slate-300" />
+                       <span className="tracking-tight">儲存圖片</span>
+                     </motion.button>
+                   </div>
+                 </div>
+               </div>
            </div>
 
            <div className="rounded-[2rem] bg-white dark:bg-slate-800 shadow-sm border border-slate-200/60 dark:border-slate-700/60 overflow-hidden relative">

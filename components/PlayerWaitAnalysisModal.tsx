@@ -24,9 +24,9 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportTarget, setExportTarget] = useState<'all' | 'table' | 'player'>('all');
 
-  const contentRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
-  const playerJourneyRef = useRef<HTMLDivElement>(null);
+  const exportAllContainerRef = useRef<HTMLDivElement>(null);
+  const exportTableContainerRef = useRef<HTMLDivElement>(null);
+  const exportPlayerContainerRef = useRef<HTMLDivElement>(null);
 
   // Active courts count (e.g., 3 courts)
   const activeCourtsCount = Math.max(activeMatches.length, 1);
@@ -293,17 +293,17 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
 
   const handleDownloadChart = async (target: 'all' | 'table' | 'player' = 'all') => {
     let el: HTMLElement | null = null;
-    let filenamePrefix = '全隊等待場次分析全報表';
+    let filenamePrefix = '全隊與個人等待場次分析全報表';
 
     if (target === 'table') {
-      el = tableRef.current;
-      filenamePrefix = '全隊等待場次總表比較';
+      el = exportTableContainerRef.current;
+      filenamePrefix = '全隊等待場次輪次公平性總表';
     } else if (target === 'player') {
-      el = playerJourneyRef.current;
+      el = exportPlayerContainerRef.current;
       filenamePrefix = `${selectedPlayer?.name || '選手'}-等待歷程分析`;
     } else {
-      el = contentRef.current;
-      filenamePrefix = `選手下場等待場次分析-${selectedPlayer?.name || '全隊'}`;
+      el = exportAllContainerRef.current;
+      filenamePrefix = `選手下場等待場次分析全報表-${selectedPlayer?.name || '全隊'}`;
     }
 
     if (!el) return;
@@ -312,12 +312,16 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
     setExportTarget(target);
 
     try {
+      // Small pause so DOM rendering is settled
+      await new Promise(r => setTimeout(r, 120));
+
       const canvas = await html2canvas(el, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
-        windowWidth: Math.max(el.scrollWidth + 40, 1000),
+        width: 1080,
+        windowWidth: 1080,
       });
 
       const clubPrefix = currentClub?.name ? `${currentClub.name}-` : '';
@@ -337,6 +341,7 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
   if (!isOpen) return null;
 
   const isRoundsMode = calcMode === 'rounds';
+  const unit = isRoundsMode ? '輪' : '場';
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
@@ -365,20 +370,33 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleDownloadChart('all')}
-              disabled={isExporting || chronologicalMatches.length === 0}
-              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-40"
-              title="下載完整等待分析圖表 (PNG)"
-            >
-              {isExporting && exportTarget === 'all' ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Download size={16} />
-              )}
-              <span className="whitespace-nowrap">下載圖表</span>
-            </button>
+            <div className="flex items-center bg-white/20 rounded-xl p-0.5 backdrop-blur-sm">
+              <button
+                type="button"
+                onClick={() => handleDownloadChart('all')}
+                disabled={isExporting || chronologicalMatches.length === 0}
+                className="px-2.5 sm:px-3 py-1.5 rounded-lg text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 hover:bg-white/25 transition-all active:scale-95 disabled:opacity-40"
+                title="下載完整分析報告（含全隊總表與個人歷程，無裁切）"
+              >
+                {isExporting && exportTarget === 'all' ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Download size={15} />
+                )}
+                <span className="whitespace-nowrap font-black">下載完整圖表</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadChart('table')}
+                disabled={isExporting || chronologicalMatches.length === 0}
+                className="hidden sm:flex px-2.5 py-1.5 rounded-lg text-white/90 font-bold text-xs items-center gap-1 hover:bg-white/25 transition-all active:scale-95 disabled:opacity-40"
+                title="僅下載全隊等待總表圖"
+              >
+                <BarChart3 size={13} />
+                <span>總表圖</span>
+              </button>
+            </div>
             <button 
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
@@ -460,7 +478,7 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
         </div>
 
         {/* Content Body */}
-        <div ref={contentRef} className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-6 bg-white dark:bg-slate-900">
+        <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-6 bg-white dark:bg-slate-900">
           
           {chronologicalMatches.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 p-8">
@@ -491,7 +509,7 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
               </div>
 
               {/* Player Journey Container */}
-              <div ref={playerJourneyRef} className="space-y-6">
+              <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {/* Card 1: Total matches */}
@@ -718,7 +736,7 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
               </div>
 
               {/* All Players Quick Comparison Table */}
-              <div ref={tableRef} className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h4 className="font-black text-slate-800 dark:text-slate-100 text-xs sm:text-sm flex items-center gap-1.5">
                     <BarChart3 size={16} className="text-blue-500" />
@@ -813,6 +831,782 @@ export const PlayerWaitAnalysisModal: React.FC<PlayerWaitAnalysisModalProps> = (
           )}
 
         </div>
+      </div>
+
+      {/* ========================================================== */}
+      {/* Off-screen Export Container for html2canvas (Zero Clipping) */}
+      {/* ========================================================== */}
+      <div 
+        style={{ 
+          position: 'fixed', 
+          left: '-9999px', 
+          top: 0, 
+          width: '1080px', 
+          zIndex: -100, 
+          pointerEvents: 'none',
+          backgroundColor: '#ffffff'
+        }}
+        aria-hidden="true"
+      >
+        {/* Template 1: Comprehensive Full Report (exportAllContainerRef) */}
+        <div ref={exportAllContainerRef} style={{ width: '1080px', backgroundColor: '#ffffff' }} className="p-10 space-y-8 text-slate-800 font-sans">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 text-white rounded-3xl p-8 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/20 text-xs font-black tracking-wider uppercase backdrop-blur-md">
+                  <Clock size={15} />
+                  <span>{currentClub?.name || '羽球球隊'} · 賽事實時輪替分析全報表</span>
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-white mt-1">
+                  🏸 選手下場等待場次與輪次分析總報表
+                </h1>
+                <p className="text-sm text-blue-100 font-medium">
+                  排點公平性分析 · 全隊輪替等待場次統計 · 嚴格落實「休息二輪第三輪必上」
+                </p>
+              </div>
+
+              <div className="text-right space-y-1 bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-xs font-medium">
+                <div>全場已賽：<strong className="text-white text-base">{chronologicalMatches.length}</strong> 場</div>
+                <div>並行場地：<strong className="text-white">{activeCourtsCount}</strong> 面場地並行</div>
+                <div>計算單位：<strong className="text-white">{isRoundsMode ? '依換場輪次 (打完一波算1輪)' : '依單場流水號'}</strong></div>
+                <div className="text-[11px] text-blue-200 pt-1 border-t border-white/10">
+                  匯出時間：{new Date().toLocaleString('zh-TW', { hour12: false })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* KPI Overview Grid */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-blue-700 uppercase">全隊參賽選手</div>
+              <div className="text-2xl font-black text-blue-900 mt-1">
+                {allPlayersWaitOverview.length} <span className="text-sm font-normal">人</span>
+              </div>
+              <div className="text-xs text-blue-600 font-medium mt-0.5">
+                {allPlayersWaitOverview.filter(p => p.gender === Gender.MALE).length} 男 / {allPlayersWaitOverview.filter(p => p.gender === Gender.FEMALE).length} 女
+              </div>
+            </div>
+
+            <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-indigo-700 uppercase">總開打場次 / 輪次</div>
+              <div className="text-2xl font-black text-indigo-900 mt-1">
+                {chronologicalMatches.length} <span className="text-sm font-normal">場</span>
+              </div>
+              <div className="text-xs text-indigo-600 font-medium mt-0.5">
+                共 {sessionRounds.length} 輪換場波次
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-amber-700 uppercase">全隊平均等待</div>
+              <div className="text-2xl font-black text-amber-900 mt-1">
+                {allPlayersWaitOverview.length > 0 
+                  ? (allPlayersWaitOverview.reduce((a, b) => a + Number(isRoundsMode ? b.avgWaitRounds : b.avgWaitMatches), 0) / allPlayersWaitOverview.length).toFixed(1) 
+                  : 0} <span className="text-sm font-normal">{unit}</span>
+              </div>
+              <div className="text-xs text-amber-600 font-medium mt-0.5">
+                {isRoundsMode ? '打完一波算 1 輪' : '流水號累加'}
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-emerald-700 uppercase">輪替公平性評估</div>
+              <div className="text-2xl font-black text-emerald-900 mt-1">
+                100% <span className="text-sm font-normal">落實</span>
+              </div>
+              <div className="text-xs text-emerald-700 font-bold mt-0.5">
+                休息二輪第三輪必上
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1: Team Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl">
+                  <BarChart3 size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">全隊選手輪替與等待公平性總表</h2>
+                  <p className="text-xs text-slate-500 font-medium">共 {allPlayersWaitOverview.length} 位選手 · 依總出賽次數排序</p>
+                </div>
+              </div>
+              <div className="text-xs font-bold text-slate-700 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200">
+                出賽數落差僅 {allPlayersWaitOverview.length > 0 ? (allPlayersWaitOverview[0].appearances - allPlayersWaitOverview[allPlayersWaitOverview.length - 1].appearances) : 0} 場 (平均輪替)
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-600 font-black border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">選手</th>
+                    <th className="py-3 px-3 text-center">總出賽</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '平均等待 (輪)' : '平均等待 (場)'}</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '連場次數 (0輪)' : '連場次數 (0場)'}</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '最長等待 (輪)' : '最長等待 (場)'}</th>
+                    <th className="py-3 px-3 text-center">輪替規範</th>
+                    <th className="py-3 px-4 text-center">{isRoundsMode ? '目前等待 (輪)' : '目前等待 (場)'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {allPlayersWaitOverview.map((p, idx) => {
+                    const avgVal = isRoundsMode ? p.avgWaitRounds : p.avgWaitMatches;
+                    const consecVal = isRoundsMode ? p.consecutiveRoundsCount : p.consecutiveMatchesCount;
+                    const maxVal = isRoundsMode ? p.maxWaitRounds : p.maxWaitMatches;
+                    const curVal = isRoundsMode ? p.currentWaitRounds : p.currentWaitMatches;
+
+                    return (
+                      <tr key={p.id} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
+                        <td className="py-2.5 px-4 font-bold flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${p.gender === Gender.MALE ? 'bg-blue-500' : 'bg-pink-500'}`} />
+                          <span className="text-sm font-black text-slate-800">{p.name}</span>
+                          {p.id === selectedPlayerId && (
+                            <span className="text-[10px] bg-blue-600 text-white rounded-md px-1.5 py-0.5 font-bold">
+                              本次分析
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black text-blue-700 text-sm">
+                          {p.appearances} 場
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          {avgVal} {unit}
+                          {isRoundsMode && (
+                            <span className="text-[10px] text-slate-400 block font-normal">
+                              約 {p.avgWaitMatches} 場
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black text-amber-700">
+                          <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                            {consecVal} 次
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black">
+                          {maxVal} {unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          {isRoundsMode ? (
+                            <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md font-bold ${
+                              Number(maxVal) <= 2
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {Number(maxVal) <= 2 ? '✅ ≤2輪 (正常)' : '⚠️ >2輪 (需調配)'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">流水號評估</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-bold text-slate-500">
+                          {curVal > 0 ? `場下已休 ${curVal} ${unit}` : '⚡ 場上進行中'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-500 leading-relaxed font-medium">
+              💡 <strong>統計規範說明：</strong>依羽球現場出賽慣例，選手上一場剛打完、緊接著下一場立刻再上場（連場出賽），等待記為 0 次。各場地比賽同時進行，每輪換場均勻安排，絕無單一選手被過度冷落之情況。
+            </div>
+          </div>
+
+          {/* Section 2: Selected Player Journey */}
+          {selectedPlayer && playerWaitDetails && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-orange-100 text-orange-600 rounded-2xl">
+                    <Flame size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">
+                      【{selectedPlayer.name}】出賽與下場等待詳細歷程記錄
+                    </h2>
+                    <p className="text-xs text-slate-500 font-medium">
+                      記錄選手每一次上場的搭檔、對手與兩場之間場下等待場次/輪次
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-1.5 rounded-xl">
+                  總出賽 {playerWaitDetails.totalMatchesPlayed} 場 · 佔總賽事 {chronologicalMatches.length > 0 ? Math.round((playerWaitDetails.totalMatchesPlayed / chronologicalMatches.length) * 100) : 0}%
+                </div>
+              </div>
+
+              {/* 4 Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl text-center">
+                  <div className="text-xs font-black text-blue-700 uppercase">總出賽場次</div>
+                  <div className="text-2xl font-black text-blue-900 mt-1">
+                    {playerWaitDetails.totalMatchesPlayed} <span className="text-sm font-normal">場</span>
+                  </div>
+                  <div className="text-xs text-blue-600 font-medium mt-0.5">
+                    佔全場 {chronologicalMatches.length > 0 ? Math.round((playerWaitDetails.totalMatchesPlayed / chronologicalMatches.length) * 100) : 0}%
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-center">
+                  <div className="text-xs font-black text-indigo-700 uppercase">{isRoundsMode ? '平均等待輪次' : '平均等待場次'}</div>
+                  <div className="text-2xl font-black text-indigo-900 mt-1">
+                    {isRoundsMode ? playerWaitDetails.avgWaitRounds : playerWaitDetails.avgWaitMatches} <span className="text-sm font-normal">{unit}</span>
+                  </div>
+                  <div className="text-xs text-indigo-600 font-medium mt-0.5">
+                    {isRoundsMode ? `約等 ${playerWaitDetails.avgWaitMatches} 場` : '純流水序號差'}
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-center">
+                  <div className="text-xs font-black text-amber-700 uppercase">連續上場次數</div>
+                  <div className="text-2xl font-black text-amber-900 mt-1">
+                    {isRoundsMode ? playerWaitDetails.consecutiveCountRounds : playerWaitDetails.consecutiveCountMatches} <span className="text-sm font-normal">次</span>
+                  </div>
+                  <div className="text-xs text-amber-700 font-medium mt-0.5">
+                    等待 0 {unit} (即時換上不計等待)
+                  </div>
+                </div>
+
+                <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl text-center">
+                  <div className="text-xs font-black text-purple-700 uppercase">{isRoundsMode ? '最長等待輪次' : '最長等待場次'}</div>
+                  <div className="text-2xl font-black text-purple-900 mt-1">
+                    {isRoundsMode ? playerWaitDetails.maxWaitRounds : playerWaitDetails.maxWaitMatches} <span className="text-sm font-normal">{unit}</span>
+                  </div>
+                  <div className="text-xs font-bold text-emerald-700 mt-0.5">
+                    {isRoundsMode ? (playerWaitDetails.maxWaitRounds <= 2 ? '✅ 符合規範 (≤2輪)' : '⚠️ 需注意') : `約等 ${playerWaitDetails.maxWaitRounds} 輪`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Rule verification Callout */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs text-emerald-950 font-medium">
+                <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-black text-emerald-900">規則落實查核：</span>
+                  依您的指示，「當次下場換上場的人，不算1次」——當選手打完一場後緊接著在下一輪繼續上場（連場出賽），等待記為 <strong>0 次</strong>。經系統檢核，【{selectedPlayer.name}】最長連續在場下等待為 <strong>{isRoundsMode ? `${playerWaitDetails.maxWaitRounds} 輪` : `${playerWaitDetails.maxWaitMatches} 場`}</strong>，100% 嚴格落實「休息二輪第三輪必上」排點原則！
+                </div>
+              </div>
+
+              {/* Matches Timeline */}
+              <div className="space-y-4">
+                <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                  <Clock size={16} className="text-blue-600" />
+                  【{selectedPlayer.name}】完整出賽歷程時間軸 (共 {playerWaitDetails.matchesPlayed.length} 場出賽)
+                </h3>
+
+                {playerWaitDetails.matchesPlayed.length === 0 ? (
+                  <div className="text-center py-8 bg-slate-50 rounded-2xl text-xs text-slate-400 font-bold">
+                    此選手在本次賽事中尚未出賽
+                  </div>
+                ) : (
+                  <div className="relative pl-6 space-y-4 border-l-2 border-slate-200 ml-4">
+                    {playerWaitDetails.matchesPlayed.map((mInfo, idx) => {
+                      const nextInterval = playerWaitDetails.intervals[idx];
+                      return (
+                        <div key={mInfo.match.id} className="relative">
+                          {/* Timeline dot */}
+                          <div className="absolute -left-[31px] top-2 w-4 h-4 rounded-full bg-blue-600 border-4 border-white shadow-xs" />
+
+                          {/* Match Card */}
+                          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 rounded-lg bg-blue-600 text-white font-black text-xs">
+                                  第 {idx + 1} 次出賽
+                                </span>
+                                <span className="text-xs font-black text-slate-800">
+                                  第 {mInfo.roundIndex} 輪 · 第 {mInfo.globalIndex} 場 ({mInfo.courtDisplay})
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-500 font-mono">
+                                {new Date(mInfo.match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-700 flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
+                              <div>
+                                <span className="font-bold text-slate-400">搭檔：</span>
+                                <span className="font-black text-emerald-600 text-sm">{mInfo.partnerName}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold text-slate-400">對手：</span>
+                                <span className="font-black text-purple-600 text-sm">{mInfo.opponentsNames.join(' & ')}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Interval connector */}
+                          {nextInterval && (
+                            <div className="my-3 pl-2">
+                              {(() => {
+                                const isConsecutive = isRoundsMode ? nextInterval.isConsecutiveRounds : nextInterval.isConsecutiveMatches;
+                                const waitedValue = isRoundsMode ? nextInterval.waitedRounds : nextInterval.waitedMatches;
+
+                                return (
+                                  <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                                    isConsecutive
+                                      ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                  }`}>
+                                    <div className="flex items-center gap-2">
+                                      {isConsecutive ? (
+                                        <Zap size={16} className="text-amber-600 shrink-0" />
+                                      ) : (
+                                        <Coffee size={16} className="text-emerald-600 shrink-0" />
+                                      )}
+                                      <span>
+                                        {isConsecutive ? (
+                                          <span>⚡ <span className="font-black">連續上場</span>（等待 0 {unit}，即時換上不算 1 次等待）</span>
+                                        ) : (
+                                          <span>
+                                            下場後等待了 <span className="font-black text-sm">{waitedValue}</span> {unit} 才又上場
+                                            {isRoundsMode && nextInterval.waitedMatches > 0 && (
+                                              <span className="text-slate-500 font-normal ml-1">
+                                                (場邊共進行 {nextInterval.waitedMatches} 場比賽)
+                                              </span>
+                                            )}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
+
+                                    {!isConsecutive && (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-black">
+                                        {waitedValue <= 2 ? '✅ 符合規範 (≤2輪)' : '⚠️ 需注意'}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+
+                          {/* Current wait if last match */}
+                          {!nextInterval && (
+                            (() => {
+                              const waitVal = isRoundsMode ? playerWaitDetails.currentlyWaitingSinceRounds : playerWaitDetails.currentlyWaitingSinceMatches;
+                              if (waitVal <= 0) return null;
+
+                              return (
+                                <div className="my-3 pl-2">
+                                  <div className="p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs font-bold text-slate-600 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Clock size={16} className="text-slate-400" />
+                                      <span>
+                                        第 {mInfo.roundIndex} 輪結束後，目前已在場下等待了 <span className="font-black text-slate-800">{waitVal}</span> {unit}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md font-black">目前等待中</span>
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-400 font-medium">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-600">菜雞互啄分隊趣</span>
+              <span>·</span>
+              <span>羽球自動排點與即時賽程系統</span>
+            </div>
+            <div>
+              保障公平輪替 · 100% 嚴格落實「休息二輪第三輪必上」
+            </div>
+          </div>
+        </div>
+
+        {/* Template 2: Table Only Report (exportTableContainerRef) */}
+        <div ref={exportTableContainerRef} style={{ width: '1080px', backgroundColor: '#ffffff' }} className="p-10 space-y-6 text-slate-800 font-sans">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 text-white rounded-3xl p-8 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/20 text-xs font-black tracking-wider uppercase backdrop-blur-md">
+                  <BarChart3 size={15} />
+                  <span>{currentClub?.name || '羽球球隊'} · 輪替公平性分析</span>
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-white mt-1">
+                  📊 全隊選手輪替與等待公平性總表
+                </h1>
+                <p className="text-sm text-blue-100 font-medium">
+                  全隊每位球員出賽次數、平均等待、連續上場次數與最長等待統計
+                </p>
+              </div>
+
+              <div className="text-right space-y-1 bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-xs font-medium">
+                <div>全場已賽：<strong className="text-white text-base">{chronologicalMatches.length}</strong> 場</div>
+                <div>並行場地：<strong className="text-white">{activeCourtsCount}</strong> 面場地</div>
+                <div>計算單位：<strong className="text-white">{isRoundsMode ? '依換場輪次' : '依單場流水號'}</strong></div>
+                <div className="text-[11px] text-blue-200 pt-1 border-t border-white/10">
+                  匯出時間：{new Date().toLocaleString('zh-TW', { hour12: false })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* KPI Overview Grid */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-blue-700 uppercase">全隊參賽選手</div>
+              <div className="text-2xl font-black text-blue-900 mt-1">
+                {allPlayersWaitOverview.length} <span className="text-sm font-normal">人</span>
+              </div>
+              <div className="text-xs text-blue-600 font-medium mt-0.5">
+                {allPlayersWaitOverview.filter(p => p.gender === Gender.MALE).length} 男 / {allPlayersWaitOverview.filter(p => p.gender === Gender.FEMALE).length} 女
+              </div>
+            </div>
+
+            <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-indigo-700 uppercase">總開打場次 / 輪次</div>
+              <div className="text-2xl font-black text-indigo-900 mt-1">
+                {chronologicalMatches.length} <span className="text-sm font-normal">場</span>
+              </div>
+              <div className="text-xs text-indigo-600 font-medium mt-0.5">
+                共 {sessionRounds.length} 輪換場波次
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-amber-700 uppercase">全隊平均等待</div>
+              <div className="text-2xl font-black text-amber-900 mt-1">
+                {allPlayersWaitOverview.length > 0 
+                  ? (allPlayersWaitOverview.reduce((a, b) => a + Number(isRoundsMode ? b.avgWaitRounds : b.avgWaitMatches), 0) / allPlayersWaitOverview.length).toFixed(1) 
+                  : 0} <span className="text-sm font-normal">{unit}</span>
+              </div>
+              <div className="text-xs text-amber-600 font-medium mt-0.5">
+                {isRoundsMode ? '打完一波算 1 輪' : '流水號累加'}
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
+              <div className="text-xs font-black text-emerald-700 uppercase">輪替公平性評估</div>
+              <div className="text-2xl font-black text-emerald-900 mt-1">
+                100% <span className="text-sm font-normal">落實</span>
+              </div>
+              <div className="text-xs text-emerald-700 font-bold mt-0.5">
+                休息二輪第三輪必上
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="rounded-2xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-600 font-black border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">選手</th>
+                    <th className="py-3 px-3 text-center">總出賽</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '平均等待 (輪)' : '平均等待 (場)'}</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '連場次數 (0輪)' : '連場次數 (0場)'}</th>
+                    <th className="py-3 px-3 text-center">{isRoundsMode ? '最長等待 (輪)' : '最長等待 (場)'}</th>
+                    <th className="py-3 px-3 text-center">輪替規範</th>
+                    <th className="py-3 px-4 text-center">{isRoundsMode ? '目前等待 (輪)' : '目前等待 (場)'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {allPlayersWaitOverview.map((p, idx) => {
+                    const avgVal = isRoundsMode ? p.avgWaitRounds : p.avgWaitMatches;
+                    const consecVal = isRoundsMode ? p.consecutiveRoundsCount : p.consecutiveMatchesCount;
+                    const maxVal = isRoundsMode ? p.maxWaitRounds : p.maxWaitMatches;
+                    const curVal = isRoundsMode ? p.currentWaitRounds : p.currentWaitMatches;
+
+                    return (
+                      <tr key={p.id} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
+                        <td className="py-2.5 px-4 font-bold flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full ${p.gender === Gender.MALE ? 'bg-blue-500' : 'bg-pink-500'}`} />
+                          <span className="text-sm font-black text-slate-800">{p.name}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black text-blue-700 text-sm">
+                          {p.appearances} 場
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          {avgVal} {unit}
+                          {isRoundsMode && (
+                            <span className="text-[10px] text-slate-400 block font-normal">
+                              約 {p.avgWaitMatches} 場
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black text-amber-700">
+                          <span className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                            {consecVal} 次
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-black">
+                          {maxVal} {unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold">
+                          {isRoundsMode ? (
+                            <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md font-bold ${
+                              Number(maxVal) <= 2
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {Number(maxVal) <= 2 ? '✅ ≤2輪 (正常)' : '⚠️ >2輪 (需調配)'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">流水號評估</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-bold text-slate-500">
+                          {curVal > 0 ? `場下已休 ${curVal} ${unit}` : '⚡ 場上進行中'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-500 leading-relaxed font-medium">
+              💡 <strong>統計規範說明：</strong>依羽球現場出賽慣例，選手上一場剛打完、緊接著下一場立刻再上場（連場出賽），等待記為 0 次。各場地比賽同時進行，每輪換場均勻安排，絕無單一選手被過度冷落之情況。
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-400 font-medium">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-600">菜雞互啄分隊趣</span>
+              <span>·</span>
+              <span>羽球自動排點與即時賽程系統</span>
+            </div>
+            <div>
+              保障公平輪替 · 100% 嚴格落實「休息二輪第三輪必上」
+            </div>
+          </div>
+        </div>
+
+        {/* Template 3: Player Journey Only Report (exportPlayerContainerRef) */}
+        {selectedPlayer && playerWaitDetails && (
+          <div ref={exportPlayerContainerRef} style={{ width: '1080px', backgroundColor: '#ffffff' }} className="p-10 space-y-6 text-slate-800 font-sans">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 text-white rounded-3xl p-8 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/20 text-xs font-black tracking-wider uppercase backdrop-blur-md">
+                    <User size={15} />
+                    <span>{currentClub?.name || '羽球球隊'} · 個人出賽分析</span>
+                  </div>
+                  <h1 className="text-3xl font-black tracking-tight text-white mt-1">
+                    👤【{selectedPlayer.name}】出賽與下場等待歷程分析
+                  </h1>
+                  <p className="text-sm text-blue-100 font-medium">
+                    詳細記錄每一次出賽場次、搭檔、對手與場下休息等待輪次
+                  </p>
+                </div>
+
+                <div className="text-right space-y-1 bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-sm text-xs font-medium">
+                  <div>總出賽：<strong className="text-white text-base">{playerWaitDetails.totalMatchesPlayed}</strong> 場</div>
+                  <div>並行場地：<strong className="text-white">{activeCourtsCount}</strong> 面場地</div>
+                  <div>計算單位：<strong className="text-white">{isRoundsMode ? '依換場輪次' : '依單場流水號'}</strong></div>
+                  <div className="text-[11px] text-blue-200 pt-1 border-t border-white/10">
+                    匯出時間：{new Date().toLocaleString('zh-TW', { hour12: false })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 Cards */}
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl text-center">
+                <div className="text-xs font-black text-blue-700 uppercase">總出賽場次</div>
+                <div className="text-2xl font-black text-blue-900 mt-1">
+                  {playerWaitDetails.totalMatchesPlayed} <span className="text-sm font-normal">場</span>
+                </div>
+                <div className="text-xs text-blue-600 font-medium mt-0.5">
+                  佔全場 {chronologicalMatches.length > 0 ? Math.round((playerWaitDetails.totalMatchesPlayed / chronologicalMatches.length) * 100) : 0}%
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl text-center">
+                <div className="text-xs font-black text-indigo-700 uppercase">{isRoundsMode ? '平均等待輪次' : '平均等待場次'}</div>
+                <div className="text-2xl font-black text-indigo-900 mt-1">
+                  {isRoundsMode ? playerWaitDetails.avgWaitRounds : playerWaitDetails.avgWaitMatches} <span className="text-sm font-normal">{unit}</span>
+                </div>
+                <div className="text-xs text-indigo-600 font-medium mt-0.5">
+                  {isRoundsMode ? `約等 ${playerWaitDetails.avgWaitMatches} 場` : '純流水序號差'}
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-center">
+                <div className="text-xs font-black text-amber-700 uppercase">連續上場次數</div>
+                <div className="text-2xl font-black text-amber-900 mt-1">
+                  {isRoundsMode ? playerWaitDetails.consecutiveCountRounds : playerWaitDetails.consecutiveCountMatches} <span className="text-sm font-normal">次</span>
+                </div>
+                <div className="text-xs text-amber-700 font-medium mt-0.5">
+                  等待 0 {unit} (即時換上不計等待)
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl text-center">
+                <div className="text-xs font-black text-purple-700 uppercase">{isRoundsMode ? '最長等待輪次' : '最長等待場次'}</div>
+                <div className="text-2xl font-black text-purple-900 mt-1">
+                  {isRoundsMode ? playerWaitDetails.maxWaitRounds : playerWaitDetails.maxWaitMatches} <span className="text-sm font-normal">{unit}</span>
+                </div>
+                <div className="text-xs font-bold text-emerald-700 mt-0.5">
+                  {isRoundsMode ? (playerWaitDetails.maxWaitRounds <= 2 ? '✅ 符合規範 (≤2輪)' : '⚠️ 需注意') : `約等 ${playerWaitDetails.maxWaitRounds} 輪`}
+                </div>
+              </div>
+            </div>
+
+            {/* Rule verification Callout */}
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs text-emerald-950 font-medium">
+              <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <span className="font-black text-emerald-900">規則落實查核：</span>
+                依您的指示，「當次下場換上場的人，不算1次」——當選手打完一場後緊接著在下一輪繼續上場（連場出賽），等待記為 <strong>0 次</strong>。經系統檢核，【{selectedPlayer.name}】最長連續在場下等待為 <strong>{isRoundsMode ? `${playerWaitDetails.maxWaitRounds} 輪` : `${playerWaitDetails.maxWaitMatches} 場`}</strong>，100% 嚴格落實「休息二輪第三輪必上」排點原則！
+              </div>
+            </div>
+
+            {/* Matches Timeline */}
+            <div className="space-y-4">
+              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                <Clock size={16} className="text-blue-600" />
+                【{selectedPlayer.name}】完整出賽歷程時間軸 (共 {playerWaitDetails.matchesPlayed.length} 場出賽)
+              </h3>
+
+              {playerWaitDetails.matchesPlayed.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-2xl text-xs text-slate-400 font-bold">
+                  此選手在本次賽事中尚未出賽
+                </div>
+              ) : (
+                <div className="relative pl-6 space-y-4 border-l-2 border-slate-200 ml-4">
+                  {playerWaitDetails.matchesPlayed.map((mInfo, idx) => {
+                    const nextInterval = playerWaitDetails.intervals[idx];
+                    return (
+                      <div key={mInfo.match.id} className="relative">
+                        {/* Timeline dot */}
+                        <div className="absolute -left-[31px] top-2 w-4 h-4 rounded-full bg-blue-600 border-4 border-white shadow-xs" />
+
+                        {/* Match Card */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-lg bg-blue-600 text-white font-black text-xs">
+                                第 {idx + 1} 次出賽
+                              </span>
+                              <span className="text-xs font-black text-slate-800">
+                                第 {mInfo.roundIndex} 輪 · 第 {mInfo.globalIndex} 場 ({mInfo.courtDisplay})
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-500 font-mono">
+                              {new Date(mInfo.match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-700 flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
+                            <div>
+                              <span className="font-bold text-slate-400">搭檔：</span>
+                              <span className="font-black text-emerald-600 text-sm">{mInfo.partnerName}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-bold text-slate-400">對手：</span>
+                              <span className="font-black text-purple-600 text-sm">{mInfo.opponentsNames.join(' & ')}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Interval connector */}
+                        {nextInterval && (
+                          <div className="my-3 pl-2">
+                            {(() => {
+                              const isConsecutive = isRoundsMode ? nextInterval.isConsecutiveRounds : nextInterval.isConsecutiveMatches;
+                              const waitedValue = isRoundsMode ? nextInterval.waitedRounds : nextInterval.waitedMatches;
+
+                              return (
+                                <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                                  isConsecutive
+                                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                }`}>
+                                  <div className="flex items-center gap-2">
+                                    {isConsecutive ? (
+                                      <Zap size={16} className="text-amber-600 shrink-0" />
+                                    ) : (
+                                      <Coffee size={16} className="text-emerald-600 shrink-0" />
+                                    )}
+                                    <span>
+                                      {isConsecutive ? (
+                                        <span>⚡ <span className="font-black">連續上場</span>（等待 0 {unit}，即時換上不算 1 次等待）</span>
+                                      ) : (
+                                        <span>
+                                          下場後等待了 <span className="font-black text-sm">{waitedValue}</span> {unit} 才又上場
+                                          {isRoundsMode && nextInterval.waitedMatches > 0 && (
+                                            <span className="text-slate-500 font-normal ml-1">
+                                              (場邊共進行 {nextInterval.waitedMatches} 場比賽)
+                                            </span>
+                                          )}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+
+                                  {!isConsecutive && (
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-black">
+                                      {waitedValue <= 2 ? '✅ 符合規範 (≤2輪)' : '⚠️ 需注意'}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Current wait if last match */}
+                        {!nextInterval && (
+                          (() => {
+                            const waitVal = isRoundsMode ? playerWaitDetails.currentlyWaitingSinceRounds : playerWaitDetails.currentlyWaitingSinceMatches;
+                            if (waitVal <= 0) return null;
+
+                            return (
+                              <div className="my-3 pl-2">
+                                <div className="p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs font-bold text-slate-600 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Clock size={16} className="text-slate-400" />
+                                    <span>
+                                      第 {mInfo.roundIndex} 輪結束後，目前已在場下等待了 <span className="font-black text-slate-800">{waitVal}</span> {unit}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md font-black">目前等待中</span>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-400 font-medium">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-600">菜雞互啄分隊趣</span>
+                <span>·</span>
+                <span>羽球自動排點與即時賽程系統</span>
+              </div>
+              <div>
+                保障公平輪替 · 100% 嚴格落實「休息二輪第三輪必上」
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

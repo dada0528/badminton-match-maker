@@ -100,11 +100,11 @@ const Header: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom Row: Action Buttons Section */}
-          <div className="flex flex-row flex-nowrap overflow-x-auto hide-scrollbar items-center gap-2 sm:gap-3 w-full pb-1 mask-linear-fade">
+          {/* Bottom Row: Action Buttons Section (Wrapped, no horizontal scrolling) */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-3 w-full pb-1">
             
             {/* Money & Match Analysis Buttons */}
-            <div className="flex bg-slate-100/80 dark:bg-slate-800/80 rounded-xl p-1 border border-slate-200 dark:border-slate-700/50 shadow-inner shrink-0">
+            <div className="flex flex-wrap items-center bg-slate-100/80 dark:bg-slate-800/80 rounded-xl p-0.5 sm:p-1 border border-slate-200 dark:border-slate-700/50 shadow-inner">
               <motion.button 
                 whileHover={{ backgroundColor: 'white', scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
